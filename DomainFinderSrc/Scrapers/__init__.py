@@ -1,0 +1,1 @@
+from DomainFinderSrc.Scrapers import BasicScraper

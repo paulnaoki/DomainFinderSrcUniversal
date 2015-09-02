@@ -17,10 +17,11 @@ class FilteredDomainData(Serializable):
         self.archive = archive
         self.found = found
         self.tf_cf_deviation = tf_cf_deviation
+        self.exception = ""
 
     def to_tuple(self):
         return (self.domain, self.tf, self.cf, self.da, self.ref_domains, self.domain_var, self.backlinks, self.topic,
-                self.price, self.archive, self.found, self.tf_cf_deviation)
+                self.price, self.archive, self.found, self.tf_cf_deviation, self.exception)
 
     def __str__(self):
         return str(self.__dict__)

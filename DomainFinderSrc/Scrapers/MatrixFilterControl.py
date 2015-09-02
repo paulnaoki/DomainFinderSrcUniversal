@@ -19,17 +19,18 @@ class FilterPool(threading.Thread, FeedbackInterface):
         self._filters = []
         manager = AccountManager()
         self._proxies = ProxyManager().get_proxies()
-        moz_majestic_queue = Queue()
+        majestic_queue = Queue()
         archive_queue = Queue()
-        filter_moz = MozFilter(input_queue=self._input_queue, output_queue=moz_majestic_queue,
+        filter_moz = MozFilter(input_queue=self._input_queue, output_queue=archive_queue,
                                stop_event=self._stop_event, min_DA_value=self._maxtrix.da, manager=manager,
                                proxies=self._proxies)  # depend on number of accounts
-        filter_maj = MajesticFilter(input_queue=moz_majestic_queue, output_queue=archive_queue,
+        filter_archive = ArchiveOrgFilter(input_queue=archive_queue, output_queue=majestic_queue,
+                                  stop_event=self._stop_event, queue_lock=self._queue_lock)  # one worker
+        filter_maj = MajesticFilter(input_queue=majestic_queue, output_queue=self._output_queue,
                                     stop_event=self._stop_event, TF=self._maxtrix.tf, CF=self._maxtrix.cf,
                                     CF_TF_Deviation=self._maxtrix.tf_cf_deviation, Ref_Domains=self._maxtrix.ref_domains,
                                     manager=manager)  # depend on number of accounts
-        filter_archive = ArchiveOrgFilter(input_queue=archive_queue, output_queue=self._output_queue,
-                                          stop_event=self._stop_event, queue_lock=self._queue_lock)  # one worker
+
 
         self._filters.append(filter_moz)
         self._filters.append(filter_maj)

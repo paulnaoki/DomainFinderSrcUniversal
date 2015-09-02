@@ -163,6 +163,7 @@ class MiningMasterController(threading.Thread):
         self._seed_db_lock = RLock()
         self._external_db_lock = RLock()
         self._result_db_lock = RLock()
+        self._result_bad_db_lock = RLock()
         self._redemption_db_lock = RLock()
         self.update_db_stats(force_update=True)
         self._stop_event = Event()
@@ -195,7 +196,11 @@ class MiningMasterController(threading.Thread):
                                 filtered = FilteredResultDB(name, db_filter=fil.filtered_result)
                                 filtered_count = filtered.site_count()
                                 filtered.close()
-                            x = DatabaseStatus(name, seed_count, external_count, filtered_count)
+                            with self._result_bad_db_lock:
+                                filtered_bad = FilteredResultDB(name, bad_db=True, db_filter=fil.filtered_result)
+                                filtered_count_bad = filtered_bad.site_count()
+                                filtered_bad.close()
+                            x = DatabaseStatus(name, seed_count, external_count, filtered_count, filtered_count_bad)
                             databases.append(x)
                     self.seed_db_update_time = time.time()
                     self.external_db_update_time = time.time()
@@ -238,6 +243,10 @@ class MiningMasterController(threading.Thread):
                                 filtered = FilteredResultDB(name, db_filter=fil.filtered_result)
                                 db_s.filtered = filtered.site_count()
                                 filtered.close()
+
+                                filtered_bad = FilteredResultDB(name, bad_db=True, db_filter=fil.filtered_result)
+                                db_s.bad_filtered = filtered_bad.site_count()
+                                filtered_bad.close()
                     #return self.db_stats
             else:
                 pass
@@ -262,6 +271,10 @@ class MiningMasterController(threading.Thread):
                 filtered = FilteredResultDB(db_name)
                 filtered.drop_table()
                 filtered.close()
+            with self._result_bad_db_lock:
+                filtered_bad = FilteredResultDB(db_name, bad_db=True)
+                filtered_bad.drop_table()
+                filtered_bad.close()
 
         elif db_type == DBType.Type_External:
             with self._external_db_lock:
@@ -274,6 +287,11 @@ class MiningMasterController(threading.Thread):
                 filtered = FilteredResultDB(db_name)
                 filtered.drop_table()
                 filtered.close()
+        elif db_type == DBType.Type_Filtered_Result_Bad:
+            with self._result_bad_db_lock:
+                filtered_bad = FilteredResultDB(db_name, bad_db=True)
+                filtered_bad.drop_table()
+                filtered_bad.close()
 
         self.update_db_stats(force_update=True)
 
@@ -336,6 +354,9 @@ class MiningMasterController(threading.Thread):
     def get_db_filtered(self):
         return FilteredResultDB(table=self.ref, offset=0, db_filter=self.db_filters.filtered_result)
 
+    def get_db_filtered_bad(self):
+        return FilteredResultDB(table=self.ref, offset=0, bad_db=True, db_filter=self.db_filters.filtered_result)
+
     def get_db_redemption(self):
         return ExternalSiteDB(table="temp", db_addr=get_temp_db_dir()+"Redemption.db")
 
@@ -344,6 +365,11 @@ class MiningMasterController(threading.Thread):
             if db_type == DBType.Type_Filtered_Result:
                 with self._result_db_lock:
                     db = FilteredResultDB(db_name, offset=index)
+                    data = db.get_next_patch(count=length, rollover=False)
+                    db.close()
+            if db_type == DBType.Type_Filtered_Result_Bad:
+                with self._result_bad_db_lock:
+                    db = FilteredResultDB(db_name, bad_db=True, offset=index)
                     data = db.get_next_patch(count=length, rollover=False)
                     db.close()
             elif db_type == DBType.Type_External:
@@ -539,11 +565,15 @@ class MiningMasterController(threading.Thread):
 
     def process_filtering_output_results(self):
         results = []
+        bad_results = []
         tuples = []
         while not self._filter_output_queue.empty():
             item = self._filter_output_queue.get()
             if isinstance(item, FilteredDomainData):
-                results.append(item)
+                if len(item.exception) > 0:
+                    bad_results.append(item)
+                else:
+                    results.append(item)
                 tuples.append(item.to_tuple())
         if len(results) > 0:
             try:
@@ -551,6 +581,10 @@ class MiningMasterController(threading.Thread):
                     db = self.get_db_filtered()
                     db.add_sites(results, skip_check=False)
                     db.close()
+                with self._result_bad_db_lock:
+                    bad_db = self.get_db_filtered_bad()
+                    bad_db.add_sites(bad_results, skip_check=False)
+                    bad_db.close()
             except Exception as ex:
                 ErrorLogger.log_error("MingingMasterController", ex, "process_filtering_output_results() " + self.ref)
             finally:

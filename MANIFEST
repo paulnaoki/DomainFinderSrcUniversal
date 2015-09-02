@@ -2,6 +2,8 @@
 setup.py
 DomainFinderSrc/PageNavigator.py
 DomainFinderSrc/__init__.py
+DomainFinderSrc/ArchiveOrg/ArchiveExplore.py
+DomainFinderSrc/ArchiveOrg/ProfileExtract.py
 DomainFinderSrc/ArchiveOrg/__init__.py
 DomainFinderSrc/BingCom/__init__.py
 DomainFinderSrc/GoDaddyCom/__init__.py
@@ -45,6 +47,7 @@ DomainFinderSrc/Scrapers/SeekSiteGenerator.py
 DomainFinderSrc/Scrapers/SiteCheckProcessManager.py
 DomainFinderSrc/Scrapers/SiteChecker.py
 DomainFinderSrc/Scrapers/SiteCheckerManager.py
+DomainFinderSrc/Scrapers/SiteFileManager.py
 DomainFinderSrc/Scrapers/SiteSimpleChecker.py
 DomainFinderSrc/Scrapers/SiteThreadChecker.py
 DomainFinderSrc/Scrapers/TLDs.py

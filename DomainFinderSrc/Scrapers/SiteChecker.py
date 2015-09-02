@@ -217,7 +217,7 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
             raise ValueError
         self.task_control_max = concurrent_task
         self.task_control_counter = concurrent_task
-        self._speed_penalty_threshold = int(self._progress_logging_speed/60 * concurrent_task)
+        self._speed_penalty_threshold = int(self._progress_logging_speed/30 * concurrent_task)
 
     def get_site_feedback(self) -> SeedSiteFeedback:
         return SeedSiteFeedback(self.orginal_link, page_count=self.get_page_need_look_up())
@@ -494,42 +494,6 @@ class PageChecker:
         #     return False
 
     @staticmethod
-    def get_all_link_from_source(source: Response, use_lxml_parser=False) -> []:
-        """
-        parse the page source using beautifulsoup4 by default, unless you are sure that lxml module is present
-        :param data: page soure in string
-        :param use_lxml_parser: force to use lxml module, which is way faster.
-        lxml is not install on Windows for python3.4, call SiteChecker.is_use_lxml_parser to determine
-        :return: A list of links in str
-        """
-
-        def bs4_parse():
-            link_list = []
-            soup_html = bs4.BeautifulSoup(source.text)
-            anchors = soup_html.find_all("a")
-            for anchor in anchors:
-                if anchor.has_attr("href"):
-                    link = anchor["href"]
-                    link_list.append(link)
-            return link_list
-
-        def lxml_parse():
-            from lxml import html
-            tree = html.document_fromstring(source.raw)
-            link_list = [x.attrib["href"] for x in tree.xpath("//a[@href]")]
-            return link_list
-
-        if use_lxml_parser:
-            try:
-                results = lxml_parse()
-            except:
-                results = bs4_parse()
-        else:
-            results = bs4_parse()
-
-        return results
-
-    @staticmethod
     def check_external_page(checker: SiteChecker, page: OnSiteLink, timeout=10):
         """
         check DNS Error Only
@@ -590,12 +554,7 @@ class PageChecker:
         paras = urlsplit(page.link)
         page_scheme, page_domain = paras[0], paras[1]
 
-        links = PageChecker.get_all_link_from_source(response, use_lxml_parser)
-
-        # if len(links) < 1:
-        #     if checker.get_page_need_look_up() == 1:
-        #         checker.data_source.set_continue_lock(False)
-        #     return
+        links = LinkChecker.get_webpage_links_from_source(response, use_lxml_parser)
 
         for link in links:
             link_type = OnSiteLink.TypeOutbound

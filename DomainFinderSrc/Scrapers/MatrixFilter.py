@@ -82,26 +82,36 @@ class ArchiveOrgFilter(FilterInterface):
     """
     Get the number of useful archives
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, min_profile=1, min_page_size=1, *args, **kwargs):
+        self._min_profile = min_profile
+        self._min_page_size = min_page_size
+        self._log_file = "Archive_count_filtering.csv"
         FilterInterface.__init__(self, *args, worker_number=1, **kwargs)
 
     def get_input_kwargs(self):
         return None
 
     def process_data(self, data: FilteredDomainData, **kwargs):
+        result_ok = False
         if isinstance(data, FilteredDomainData):
             try:
                 if len(data.domain_var) == 0:
                     data.domain_var = data.domain
-                links, count = ArchiveOrg.get_url_info(data.domain_var, min_size=1)
+                links = ArchiveOrg.get_url_info(data.domain_var, min_size=self._min_page_size, limit=-100)
+                count = len(links)
                 data.archive = count
+                if count <= self._min_profile:
+                    raise ValueError("profile count is less than:" + str(self._min_profile+1))
+                result_ok = True
             except Exception as ex:
                 ErrorLogger.log_error("ArchiveOrgFilter.process_data()", ex, data.domain_var)
             finally:
                 with self._sync_lock:
                     self._job_done += 1
                         #with self._process_queue_lock:
-                    self._output_queue.put(data)
+                    if result_ok:
+                        CsvLogger.log_to_file(self._log_file, [(data.domain, data.da, data.archive)]) # log this to file
+                        self._output_queue.put(data)
         else:
             pass
 
@@ -182,6 +192,11 @@ class MozFilter(FilterInterface):
                     self._output_queue.put(data)
 
 
+class MajesticSpamException(Exception):
+    def __init__(self, *args, **kwargs):
+        Exception.__init__(self, *args, **kwargs)
+
+
 class MajesticFilter(FilterInterface):
     """
     Get TF, CF of a domain
@@ -194,7 +209,9 @@ class MajesticFilter(FilterInterface):
         self._cf_tf_deviation = CF_TF_Deviation
         self._majestic_result_anchor_limit = 100
         self._majestic_result_ref_domain_limit = 100
-        self._log_file = "Majestic_filtering.csv"
+        self._max_backlink_to_ref_domain_ratio = 6.0
+        self._log_file = "Majestic_filtering_good.csv"
+        self._bad_log_file = "Majestic_filtering_bad.csv"
         self._spam_keyword = [x.lower() for x in FileIO.FileHandler.read_lines_from_file(FilePath.get_spam_filter_keywords_file_path())]
         self._spam_anchor = [x.lower() for x in FileIO.FileHandler.read_lines_from_file(FilePath.get_spam_filter_anchors_file_path())]
         self._bad_country = [x.upper() for x in FileIO.FileHandler.read_lines_from_file(FilePath.get_spam_filter_bad_country_path())]
@@ -215,7 +232,7 @@ class MajesticFilter(FilterInterface):
             time.sleep(1)
         return {"Account": account}
 
-    def _filter_tf_cf(self, majestic: MajesticCom, data: FilteredDomainData) -> FilteredDomainData:
+    def _filter_tf_cf_backlink_ratio(self, majestic: MajesticCom, data: FilteredDomainData) -> FilteredDomainData:
         ranking = majestic.get_cf_tf_list(["http://"+data.domain,
                                            "www."+data.domain,
                                            "http://www."+data.domain],
@@ -257,7 +274,19 @@ class MajesticFilter(FilterInterface):
         except:
             return False
 
+    def _filter_domain_name(self, domain: str) -> bool:
+        for keyword in self._spam_keyword:
+            if keyword in domain:
+                raise MajesticSpamException("domain name {0:s} has spam word {1:s}".format(domain, keyword))
+        return True
+
     def _filter_anchor_text(self, majestic: MajesticCom, domain: str) -> bool:
+        """
+        check anchor text.
+        :param majestic:
+        :param domain:
+        :return:True if everything ok, else raise Exception.
+        """
         min_anchor_variation_limit = 2
         no_follow_limit = 0.5
         domain_contain_limit = 5
@@ -266,29 +295,39 @@ class MajesticFilter(FilterInterface):
             = majestic.get_anchor_text_info(domain=domain, max_count=self._majestic_result_anchor_limit,
                                             is_dev=DomainFinderSrc.IS_DEBUG)
         if len(anchor_list) <= min_anchor_variation_limit:
-            raise ValueError("number of anchor variation is less than 2.")
+            raise MajesticSpamException("number of anchor variation is less than 2.")
         elif (deleted + nofollow)/total > no_follow_limit:
-            raise ValueError("deleted and nofollow backlinks are more than 50%.")
+            raise MajesticSpamException("deleted and nofollow backlinks are more than 50%.")
         elif len(self._spam_anchor) > 0:
             count = 0
             for anchor in anchor_list:
-                if domain in anchor:
+                if domain in anchor and count < domain_contain_limit:
                     is_in_anchor = True
-                if count >= domain_contain_limit and not is_in_anchor:
-                    raise ValueError("anchor does not have the domain name in top {0:d} results.".format(domain_contain_limit,))
 
                 # if not MajesticFilter._is_valid_ISO8859_1_str(anchor):
                 #     raise ValueError("anchor contains invalid western language word: {0:s}.".format(anchor,))
                 for spam in self._spam_anchor:
-                    if anchor in spam:
-                        raise ValueError("anchor {0:s} is in spam word {1:s}".format(anchor, spam))
-            count += 1
-
+                    # pattern = re.compile(spam, re.IGNORECASE)
+                    # if re.search(pattern, anchor):
+                    if spam in anchor:
+                        raise MajesticSpamException("anchor {0:s} is in spam word {1:s}".format(anchor, spam))
+                count += 1
+        if not is_in_anchor:
+            #print(anchor_list)
+            raise MajesticSpamException("anchor does not have the domain name in top {0:d} results.".format(domain_contain_limit,))
         return True
 
     def _filter_ref_domains(self, majestic: MajesticCom, domain: str) -> bool:
+        """
+        check ref_domain info,
+        :param majestic:
+        :param domain:
+        :return: True if everything is ok, else raise Exception.
+        """
         max_bad_country_ratio = 0.1
         bad_country_count = 0
+        max_bad_country_count = 5
+        max_backlinks_for_single_bad_country = 30
         ref_domains = majestic.get_ref_domains(domain, max_count=self._majestic_result_ref_domain_limit,
                                                is_dev=DomainFinderSrc.IS_DEBUG)
         total_record = len(ref_domains)
@@ -296,22 +335,39 @@ class MajesticFilter(FilterInterface):
             if isinstance(ref_domain, MajesticRefDomainStruct):
                 if ref_domain.country in self._bad_country:
                     bad_country_count += 1
-
-        bad_country_ratio = bad_country_count/total_record > max_bad_country_ratio
-        if total_record > 0 and bad_country_ratio:
-            raise ValueError("bad country ratio is too high: {0:s} percent.", bad_country_ratio)
+                    if ref_domain.backlinks > max_backlinks_for_single_bad_country:
+                        raise MajesticSpamException("{0:s} from bad country has more than {1:d} backlinks.".format(ref_domain.domain,max_backlinks_for_single_bad_country))
+        if bad_country_count >= max_bad_country_count:
+            raise MajesticSpamException("too many bad countries, {0:d} detected.".format(bad_country_count,))
+        bad_country_ratio = bad_country_count/total_record
+        if total_record > 0 and bad_country_ratio > max_bad_country_ratio:
+            raise MajesticSpamException("bad country ratio in ref domains is too high: {0:.1f} percent.".format(bad_country_ratio*100,))
         return True
 
     def process_data(self, data: FilteredDomainData, **kwargs):
         account = kwargs.get("Account")
+        is_domain_good = False
+        is_spammed = False
         try:
             if isinstance(data, FilteredDomainData) and isinstance(account, SiteAccount):
                 majestic = MajesticCom(account)
-                data = self._filter_tf_cf(majestic, data)
+                self._filter_domain_name(domain=data.domain)
+                data = self._filter_tf_cf_backlink_ratio(majestic, data)
+                if not (data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains):
+                    raise ValueError("tf or cf doesn't match. tf:" + str(data.tf) + " cf: " + str(data.cf) + " ref domain: " + str(data.ref_domains))
+                if data.backlinks / data.ref_domains > self._max_backlink_to_ref_domain_ratio:
+                    raise MajesticSpamException("backlink to ref domain ratio is greater than {0:.1f}".format(self._max_backlink_to_ref_domain_ratio,))
+                self._filter_anchor_text(majestic, data.domain)
+                self._filter_ref_domains(majestic, data.domain)
+                is_domain_good = True
             else:
                 raise ValueError("account is none in process_data")
+        except MajesticSpamException as mjx_ex:
+            is_spammed = True
+            data.exception = str(mjx_ex)
         except Exception as ex:
-            ErrorLogger.log_error("MozFilter", ex, "process_data() " + str(data))
+            data.exception = str(ex)
+            ErrorLogger.log_error("MajesticFilter.process_data()", ex, str(data))
         finally:
             PrintLogger.print("Majestic processed: " + str(data) + " with: " + account.userID)
             if isinstance(data, FilteredDomainData):
@@ -320,9 +376,17 @@ class MajesticFilter(FilterInterface):
                     if account is not None:
                         account.Available = True
                 # if data.cf >= self._min_cf and data.tf >= self._min_tf:
-                if data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains:
+                if is_domain_good:
+                # if data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains:
                     #print("Majatic output:", data)
-                    CsvLogger.log_to_file(self._log_file, [(data.domain, data.da, data.tf, data.cf)]) # log this to file
+                    # PrintLogger.print("domain: " + data.domain + " is good.")
+                    CsvLogger.log_to_file(self._log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir()) # log this to file
                     self._output_queue.put(data)
+                elif is_spammed:
+                    CsvLogger.log_to_file(self._bad_log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir())
+                    self._output_queue.put(data)
+                else:
+                    pass
+                    # print("domain: " + data.domain + " has exception:" + data.exception)
 
 

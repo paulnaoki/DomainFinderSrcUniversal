@@ -11,6 +11,7 @@ from pythonwhois import net, parse
 import datetime
 from DomainFinderSrc.Utilities.Logging import ErrorLogger
 import re
+import bs4
 
 
 class ResponseCode:
@@ -65,17 +66,18 @@ class LinkChecker:
                      ".bz2", ".f", ".gz", ".7z", ".s7z", ".ace", ".dmg", ".jar", ".apk"]
     common_img_ex = [".jpg", ".png", ".jpeg", ".bmp", ".ico", ".gif"]
     common_html_page_ex = [".html", ".htm", ".xhtml", ".jhtml", ".shtml", ".asp", ".pl", ".cgi"
-                           ".jsp", ".jspx", ".php", ".awp"]
+                           ".jsp", ".jspx", ".php", ".awp", ".stm,", ".jspa", ".xml", ".aspx"]
+    common_font_ex = [".eot", ".woff", ".ttf", ".svg", ".otf", ".ttc", ]
     #forbidden_list = ["google.", "twitter.", "yahoo.", "facebook.", "microsoft.", "youtube.", "baidu.", "taobao.",
      #                 "linkedin.", "pinterest.", "tumblr.", "instagram.", "vk.", "flickr.", "wikipedia.org", "bbc."]
     forbidden_list = ["google.", "baidu.", "taobao.", "sina.", "tmail."]
 
     @staticmethod
-    def get_common_request_session() ->requests.Session:
+    def get_common_request_session(retries=0, redirect=2) ->requests.Session:
         s = requests.Session()
-        a = requests.adapters.HTTPAdapter(max_retries=0, pool_connections=LinkChecker.max_http_connection,
+        a = requests.adapters.HTTPAdapter(max_retries=retries, pool_connections=LinkChecker.max_http_connection,
                                           pool_maxsize=LinkChecker.max_pool_size)
-        s.max_redirects = 2
+        s.max_redirects = redirect
         s.mount('http', adapter=a)
         return s
 
@@ -200,7 +202,6 @@ class LinkChecker:
         except Exception as ex:
             print(ex)
             return False
-
 
     @staticmethod
     def check_whois_V1(domain:str):
@@ -449,8 +450,20 @@ class LinkChecker:
             return ""
 
     @staticmethod
-    def get_page_source(link: str, timeout: int=5) -> Response:
-        s = LinkChecker.get_common_request_session()
+    def get_common_web_resource(link: str, timeout: int=5, retries=0, redirect=3)-> Response:
+        s = LinkChecker.get_common_request_session(retries=retries, redirect=redirect)
+        return_obj = None
+        try:
+            return_obj = s.get(link, headers=WebRequestCommonHeader.get_common_header(), timeout=timeout)
+        except:
+            pass
+        finally:
+            s.close()
+            return return_obj
+
+    @staticmethod
+    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2) -> Response:
+        s = LinkChecker.get_common_request_session(retries=retries, redirect=redirect)
         return_obj = None
         try:
             return_obj = s.get(link, headers=WebRequestCommonHeader.get_html_header(), timeout=timeout)
@@ -465,6 +478,89 @@ class LinkChecker:
         finally:
             s.close()
             return return_obj
+
+    @staticmethod
+    def get_webpage_links_from_source(source: Response, use_lxml_parser=False) -> []:
+        """
+        parse the page source using beautifulsoup4 by default, unless you are sure that lxml module is present
+        :param data: page soure in string
+        :param use_lxml_parser: force to use lxml module, which is way faster.
+        lxml is not install on Windows for python3.4, call SiteChecker.is_use_lxml_parser to determine
+        :return: A list of links in str, webpage links only
+        """
+
+        def bs4_parse():
+            link_list = []
+            soup_html = bs4.BeautifulSoup(source.text)
+            anchors = soup_html.find_all("a")
+            for anchor in anchors:
+                if "href" in anchor.attrs:
+                    link = anchor["href"]
+                    link_list.append(link)
+            return link_list
+
+        def lxml_parse():
+            from lxml import html
+            tree = html.document_fromstring(source.raw)
+            link_list = [x.attrib["href"] for x in tree.xpath("//a[@href]")]
+            return link_list
+
+        if use_lxml_parser:
+            try:
+                results = lxml_parse()
+            except:
+                results = bs4_parse()
+        else:
+            results = bs4_parse()
+
+        return results
+
+    @staticmethod
+    def get_all_links_from_source(source: Response, use_lxml_parser=False) -> []:
+        """
+        parse the page source using beautifulsoup4 by default, unless you are sure that lxml module is present
+        :param data: page soure in string
+        :param use_lxml_parser: force to use lxml module, which is way faster.
+        lxml is not install on Windows for python3.4, call SiteChecker.is_use_lxml_parser to determine
+        :return: A list of links in str, including css, js, images, webpages
+        """
+        def bs4_parse():
+            link_list = []
+            soup_html = bs4.BeautifulSoup(source.text)
+            anchors = soup_html.find_all("a")  # links
+            for anchor in anchors:
+                if "href" in anchor.attrs:
+                #if isinstance(anchor, bs4.Tag):
+                    link = anchor["href"]
+                    link_list.append(link)
+            other_links = soup_html.find_all("link")
+            for other_link in other_links:
+                if "href" in other_link.attrs:
+                    link = other_link["href"]
+                    link_list.append(link)
+            javascripts = soup_html.find_all("script")
+            for script in javascripts:
+                if "src" in script.attrs:
+                    link = script["src"]
+                    link_list.append(link)
+
+            return link_list
+
+        def lxml_parse():  # TODO: need to test this
+            from lxml import html
+            tree = html.document_fromstring(source.raw)
+            link_list = [x.attrib["href"] for x in tree.xpath("//a[@href]")]
+            return link_list
+
+        if use_lxml_parser:
+            try:
+                results = lxml_parse()
+            except:
+                results = bs4_parse()
+        else:
+            results = bs4_parse()
+
+        return results
 
     @staticmethod
     def is_link_content_html_page(content_type: str):

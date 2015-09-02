@@ -25,6 +25,13 @@ def get_temp_db_dir():
     return DB_prefix
 
 
+def get_default_archive_dir():
+    DB_prefix = "/usr/local/DomainFinder/Archive/"  # this is for Linux
+    if MachineInfo.get_machine_type() == MachineType.Windows:
+        DB_prefix = "D:/SQLiteDB/Archive/"
+    return DB_prefix
+
+
 def get_proxy_file_path():
     machine_tpye = MachineInfo.get_machine_type()
     if machine_tpye == MachineType.Windows:
@@ -96,6 +103,7 @@ class SiteSource:
     Seed = "SeedSite"
     AllExternal = "AllExternal"
     Flitered = "Filtered"
+    Filtered_bad = "Filtered_Bad"
 
     @staticmethod
     def get_default_address(source_type: str):
@@ -108,6 +116,8 @@ class SiteSource:
             return DB_prefix + "/ResultSitesList"
         elif source_type == SiteSource.Flitered:
             return DB_prefix + "/FilteredSitesList"
+        elif source_type == SiteSource.Filtered_bad:
+            return DB_prefix + "/FilteredSitesList_Bad"
         else:
             return ":memory:"
 

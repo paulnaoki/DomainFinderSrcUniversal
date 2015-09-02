@@ -42,6 +42,20 @@ class FileHandler:
             return False
 
     @staticmethod
+    def read_all_from_file(file_path: str, option="t"):
+        if not os.path.exists(file_path):
+            return None
+        if option not in ['b', 't']:
+            raise ValueError("option is not valid.")
+        try:
+            with open(file_path, mode="r"+option) as f:
+                content = f.read()
+                f.close()
+                return content
+        except Exception as ex:
+            raise ex
+
+    @staticmethod
     def read_lines_from_file(file_path: str, option="t", remove_blank_line=True) -> []:
         if not os.path.exists(file_path):
             return []

@@ -1,6 +1,5 @@
 import socketserver
 import threading
-
 from DomainFinderSrc.MiniServer.Common.MiningTCPServer import MiningTCPServer
 from DomainFinderSrc.MiniServer.Common.SocketCommands import *
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import ScrapeDomainData

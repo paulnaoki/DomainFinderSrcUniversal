@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='DomainFinderSrc',
-    version='1.0.3.7',
+    version='1.0.3.8',
     packages=['DomainFinderSrc', 'DomainFinderSrc.xlrd', 'DomainFinderSrc.MozCom',
               'DomainFinderSrc.Scrapers', 'DomainFinderSrc.Scrapers.SiteTempDataSrc',
               'DomainFinderSrc.ArchiveOrg',
@@ -14,7 +14,7 @@ setup(
               'DomainFinderSrc.RegisterCompassCom', 'DomainFinderSrc.RegisterCompassCom.Elements',
               'DomainFinderSrc.RegisterCompassCom.Selectors', 'DomainFinderSrc.UserAccountSettings',
               'DomainFinderSrc.Utilities',
-              "DomainFinderSrc.BingCom",
+              'DomainFinderSrc.BingCom',
               'pythonwhois'],
 
     #package_dir={"pythonwhois": "pythonwhois"},

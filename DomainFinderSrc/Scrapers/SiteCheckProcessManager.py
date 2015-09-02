@@ -135,7 +135,7 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
         else:
             self.inputQueue = input_Q
         self.outputQueue = multiprocessing.Queue()
-        self._whoisQueue = multiprocessing.Queue(maxsize=100000)
+        self._whoisQueue = multiprocessing.Queue()
         #self.output_lock = threading.RLock()
         #self.tempList = site_list # if there is a need to add new sites during scripting, add to this list
         self.processPrfix = "Process-"

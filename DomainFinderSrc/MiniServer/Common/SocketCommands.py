@@ -115,19 +115,21 @@ class SignalData(Serializable):
 
 
 class DatabaseStatus(Serializable):
-    def __init__(self, name: str="", seeds: int=0, results: int=0, filtered: int=0):
+    def __init__(self, name: str="", seeds: int=0, results: int=0, filtered: int=0, bad_filtered: int=0):
         """
         hold the general info of a database
         :param name: name of a database
         :param seeds:  number of seed sites
         :param results: number of results from seed list, all the external sites.
         :param filtered: number of expired domains that has good matrix, selected from results
+        :param bad_filtered: number of expired domains that has good matrix,but is spammed, selected from results
         :return:
         """
         self.name = name
         self.seeds = seeds
         self.results = results
         self.filtered = filtered
+        self.bad_filtered = bad_filtered
 
     def __str__(self):
         return self.name + " seed: " + str(self.seeds) + " results: " + str(self.results) + " filtered: " + str(self.filtered)

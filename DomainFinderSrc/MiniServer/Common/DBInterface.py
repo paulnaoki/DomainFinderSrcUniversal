@@ -12,6 +12,7 @@ class DBType:
     Type_Seed = "Seed"
     Type_External = "External"
     Type_Filtered_Result = "FilteredResult"
+    Type_Filtered_Result_Bad = "FilteredResult_Bad"
     Type_All = "All"
 
 
@@ -251,17 +252,21 @@ class SeedSiteDB(DBInterface):
 
 
 class FilteredResultDB(DBInterface):
-    def __init__(self, table: str, offset=0, db_addr: str=None, db_filter=FilteredResultFilter()):
+    def __init__(self, table: str, offset=0, db_addr: str=None, bad_db=False, db_filter=FilteredResultFilter()):
         memTest = "CREATE TABLE IF NOT EXISTS \'%s\'(DOMAIN TEXT, TF INTEGER, CF INTEGER, DA INTEGER, ARCHIVE INTEGER, " \
-                  "FOUND INTEGER,PRICE REAL, REF_DOMAINS INTEGER, DOMAIN_VAR TEXT, BACKLINKS INTEGER, TOPIC TEXT, " \
+                  "FOUND INTEGER,PRICE REAL, REF_DOMAINS INTEGER, DOMAIN_VAR TEXT, BACKLINKS INTEGER, TOPIC TEXT, EXCEPTION TEXT," \
                   "PRIMARY KEY(DOMAIN));" % (table,)
-        DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
-                             databaseType=SiteSource.Flitered, db_filter=db_filter)
+        if not bad_db:
+            DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
+                                 databaseType=SiteSource.Flitered, db_filter=db_filter)
+        else:  # database contains bad results.
+            DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
+                     databaseType=SiteSource.Filtered_bad, db_filter=db_filter)
         self.db_filter = db_filter
 
     @staticmethod
     def get_fields_names():
-        return "DOMAIN", "TF", "CF", "DA", "ARCHIVE", "FOUND", "PRICE", "REF DOMAINS", "DOMAIN VAR", "BACKLINKS", "TOPIC"
+        return "DOMAIN", "TF", "CF", "DA", "ARCHIVE", "FOUND", "PRICE", "REF DOMAINS", "DOMAIN VAR", "BACKLINKS", "TOPIC", "EXCEPTION"
 
     def get_all_sites(self) ->[]:
         self.cur.execute("SELECT * FROM \'%s\';" % (self.tab,))
@@ -277,14 +282,14 @@ class FilteredResultDB(DBInterface):
                 if isinstance(item, FilteredDomainData):
                     need_to_add.append((item.domain, item.tf, item.cf, item.da,
                                         item.archive, item.found, item.price,
-                                        item.ref_domains, item.domain_var, item.backlinks, item.topic))
+                                        item.ref_domains, item.domain_var, item.backlinks, item.topic,item.exception))
         else:
             need_to_add = sites
 
         try:
             self.cur.executemany(u"INSERT OR REPLACE INTO \'{0:s}\' (DOMAIN, TF, CF, DA, ARCHIVE, FOUND, PRICE, "
-                                 u"REF_DOMAINS, DOMAIN_VAR, BACKLINKS, TOPIC) VALUES"
-                                 u" (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);".format(self.tab,), need_to_add)
+                                 u"REF_DOMAINS, DOMAIN_VAR, BACKLINKS, TOPIC, EXCEPTION) VALUES"
+                                 u" (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);".format(self.tab,), need_to_add)
             self.db.commit()
         except Exception as ex:
             ErrorLogger.log_error("FilteredResultDB", ex, "add_sites()")

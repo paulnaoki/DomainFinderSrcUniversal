@@ -109,6 +109,10 @@ class UserAccountDB:
         self.company = company
         self.db = sqlite3.connect(DB_prefix+DB_name)
         self.cur = self.db.cursor()
+        self.cur.execute("CREATE TABLE IF NOT EXISTS Account(Email TEXT, Company TEXT, Password TEXT, PRIMARY KEY(Email));")
+        self.cur.execute("CREATE TABLE IF NOT EXISTS Settings(Company TEXT, DB_FILTER TEXT, SCHEDULE TEXT, OPERATION_DATA TEXT,"
+                         "AccountTpye TEXT, CompanyKey TEXT, SubAccounts TEXT, PRIMARY KEY(Company));")
+        self.db.commit()
 
     def get_setting_info(self) -> SettingInfo: # need to improve this function
         cmd = u"SELECT * FROM Settings WHERE Company=\'{0:s}\';".format(self.company,)

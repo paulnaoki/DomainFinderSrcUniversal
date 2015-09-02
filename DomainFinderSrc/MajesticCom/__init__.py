@@ -104,12 +104,13 @@ class MajesticCom:
             "app_api_key": self.account.APIKey,
             "cmd": MajesticConst.cmd_get_anchor_text,
             "Mode": 0,  # (default) - returns aggregated anchor text stats.
-            "TextMode": 1,  # cleans up anchor text by removing punctunation marks and other delimiters
+            "TextMode": 0,  # (default) - returns anchor text (forced to lower case) as it was found with all punctunation marks etc
             "Count": max_count,
             "item": domain,
         }
         json_data = MajesticCom._get_json_data(parameters, is_dev)
         if json_data["Code"] == "OK":
+            anchorTextRows = []
             anchorTexts = []
             total_links = 0
             deleted_links = 0
@@ -122,6 +123,8 @@ class MajesticCom:
                 total_links += item["TotalLinks"]
                 deleted_links += item["DeletedLinks"]
                 no_follow_links += item["NoFollowLinks"]
+                anchorTextRows.append((temp_anchor, item["TotalLinks"], item["DeletedLinks"], item["NoFollowLinks"]))
+            anchorTexts = [x[0] for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
             return anchorTexts, total_links, deleted_links, no_follow_links
         else:
             raise ValueError("get_anchor_text(): data request reuturn wrong.",)

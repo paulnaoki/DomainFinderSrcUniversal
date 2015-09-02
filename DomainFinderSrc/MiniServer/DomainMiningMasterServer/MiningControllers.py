@@ -367,7 +367,7 @@ class MiningMasterController(threading.Thread):
                     db = FilteredResultDB(db_name, offset=index)
                     data = db.get_next_patch(count=length, rollover=False)
                     db.close()
-            if db_type == DBType.Type_Filtered_Result_Bad:
+            elif db_type == DBType.Type_Filtered_Result_Bad:
                 with self._result_bad_db_lock:
                     db = FilteredResultDB(db_name, bad_db=True, offset=index)
                     data = db.get_next_patch(count=length, rollover=False)

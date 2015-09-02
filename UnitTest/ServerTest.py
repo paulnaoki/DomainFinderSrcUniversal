@@ -8,4 +8,4 @@ class ServerTest(TestCase):
         MiningSlaveServer.main(PORT=9999)
 
     def testHost(self):
-        MiningMasterServer.main(PORT=9998)
+        MiningMasterServer.main(PORT=9999)

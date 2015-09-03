@@ -154,8 +154,9 @@ class MajesticCom:
                     for i in range(0, topic_count):
                         try:
                             temp = item["TopicalTrustFlow_Topic_{0:d}".format(i,)]
+                            topic_trust_flow = ["TopicalTrustFlow_Value_{0:d}".format(i,)]
                             if temp is not None:
-                                topic += temp + ";"
+                                topic += temp + ":" + str(topic_trust_flow) + ";"
                         except:
                             pass
                     if item["ResultCode"] == "OK":

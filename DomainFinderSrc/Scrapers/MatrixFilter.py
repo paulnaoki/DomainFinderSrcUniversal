@@ -112,8 +112,11 @@ class ArchiveOrgFilter(FilterInterface):
                     if result_ok:
                         CsvLogger.log_to_file(self._log_file, [(data.domain, data.da, data.archive)]) # log this to file
                         self._output_queue.put(data)
+                        return data
+                    else:
+                        return None
         else:
-            pass
+            return None
 
 
 class MozFilter(FilterInterface):
@@ -355,8 +358,8 @@ class MajesticFilter(FilterInterface):
                 data = self._filter_tf_cf_backlink_ratio(majestic, data)
                 if not (data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains):
                     raise ValueError("tf or cf doesn't match. tf:" + str(data.tf) + " cf: " + str(data.cf) + " ref domain: " + str(data.ref_domains))
-                if data.backlinks / data.ref_domains > self._max_backlink_to_ref_domain_ratio:
-                    raise MajesticSpamException("backlink to ref domain ratio is greater than {0:.1f}".format(self._max_backlink_to_ref_domain_ratio,))
+                # if data.backlinks / data.ref_domains > self._max_backlink_to_ref_domain_ratio:
+                #     raise MajesticSpamException("backlink to ref domain ratio is greater than {0:.1f}".format(self._max_backlink_to_ref_domain_ratio,))
                 self._filter_anchor_text(majestic, data.domain)
                 self._filter_ref_domains(majestic, data.domain)
                 is_domain_good = True
@@ -382,11 +385,15 @@ class MajesticFilter(FilterInterface):
                     # PrintLogger.print("domain: " + data.domain + " is good.")
                     CsvLogger.log_to_file(self._log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir()) # log this to file
                     self._output_queue.put(data)
+                    return data
                 elif is_spammed:
                     CsvLogger.log_to_file(self._bad_log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir())
                     self._output_queue.put(data)
+                    return data
                 else:
-                    pass
+                    return None
                     # print("domain: " + data.domain + " has exception:" + data.exception)
+            else:
+                return None
 
 

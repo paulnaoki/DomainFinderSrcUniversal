@@ -124,7 +124,7 @@ class MajesticCom:
                 deleted_links += item["DeletedLinks"]
                 no_follow_links += item["NoFollowLinks"]
                 anchorTextRows.append((temp_anchor, item["TotalLinks"], item["DeletedLinks"], item["NoFollowLinks"]))
-            anchorTexts = [x[0] for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
+            anchorTexts = [x for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
             return anchorTexts, total_links, deleted_links, no_follow_links
         else:
             raise ValueError("get_anchor_text(): data request reuturn wrong.",)
@@ -141,6 +141,7 @@ class MajesticCom:
                           "app_api_key": self.account.APIKey,
                           "cmd": MajesticConst.cmd_get_index_item_info,
                           "items": item_count,
+                          "EnableResourceUnitFailover": 1,
             }
             for i in range(0, item_count):
                 parameters["item"+str(i)] = domain_list[i]
@@ -154,7 +155,7 @@ class MajesticCom:
                     for i in range(0, topic_count):
                         try:
                             temp = item["TopicalTrustFlow_Topic_{0:d}".format(i,)]
-                            topic_trust_flow = ["TopicalTrustFlow_Value_{0:d}".format(i,)]
+                            topic_trust_flow = item["TopicalTrustFlow_Value_{0:d}".format(i,)]
                             if temp is not None:
                                 topic += temp + ":" + str(topic_trust_flow) + ";"
                         except:

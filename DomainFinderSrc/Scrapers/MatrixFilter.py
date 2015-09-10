@@ -100,8 +100,8 @@ class ArchiveOrgFilter(FilterInterface):
                 links = ArchiveOrg.get_url_info(data.domain_var, min_size=self._min_page_size, limit=-100)
                 count = len(links)
                 data.archive = count
-                if count <= self._min_profile:
-                    raise ValueError("profile count is less than:" + str(self._min_profile+1))
+                if count < self._min_profile:
+                    raise ValueError("profile count is less than:" + str(self._min_profile))
                 result_ok = True
             except Exception as ex:
                 ErrorLogger.log_error("ArchiveOrgFilter.process_data()", ex, data.domain_var)
@@ -112,11 +112,13 @@ class ArchiveOrgFilter(FilterInterface):
                     if result_ok:
                         CsvLogger.log_to_file(self._log_file, [(data.domain, data.da, data.archive)]) # log this to file
                         self._output_queue.put(data)
-                        return data
+                        # return data
                     else:
-                        return None
+                        pass
+                        # return None
         else:
-            return None
+            pass
+            # return None
 
 
 class MozFilter(FilterInterface):
@@ -210,9 +212,10 @@ class MajesticFilter(FilterInterface):
         self._min_ref_domains = Ref_Domains
         acc_manager = manager
         self._cf_tf_deviation = CF_TF_Deviation
-        self._majestic_result_anchor_limit = 100
-        self._majestic_result_ref_domain_limit = 100
+        self._majestic_result_anchor_limit = 50
+        self._majestic_result_ref_domain_limit = 50
         self._max_backlink_to_ref_domain_ratio = 6.0
+        self._max_percentage_for_anchor_text_ratio = 0.1
         self._log_file = "Majestic_filtering_good.csv"
         self._bad_log_file = "Majestic_filtering_bad.csv"
         self._spam_keyword = [x.lower() for x in FileIO.FileHandler.read_lines_from_file(FilePath.get_spam_filter_keywords_file_path())]
@@ -294,19 +297,24 @@ class MajesticFilter(FilterInterface):
         no_follow_limit = 0.5
         domain_contain_limit = 5
         is_in_anchor = False
+        brand_name_repeat_count = 0
+        brand_name_backlinks_count = 0
         anchor_list, total, deleted, nofollow \
             = majestic.get_anchor_text_info(domain=domain, max_count=self._majestic_result_anchor_limit,
                                             is_dev=DomainFinderSrc.IS_DEBUG)
         if len(anchor_list) <= min_anchor_variation_limit:
             raise MajesticSpamException("number of anchor variation is less than 2.")
-        elif (deleted + nofollow)/total > no_follow_limit:
-            raise MajesticSpamException("deleted and nofollow backlinks are more than 50%.")
+        # elif (deleted + nofollow)/total > no_follow_limit:
+        elif nofollow/total > no_follow_limit:
+            raise MajesticSpamException("nofollow backlinks are more than 50%.")
         elif len(self._spam_anchor) > 0:
             count = 0
-            for anchor in anchor_list:
-                if domain in anchor and count < domain_contain_limit:
-                    is_in_anchor = True
-
+            for anchor, total_links, deleted_links, no_follow_links in anchor_list:
+                if domain in anchor:
+                    if count < domain_contain_limit:
+                        is_in_anchor = True
+                    brand_name_backlinks_count += total_links
+                    brand_name_repeat_count += 1
                 # if not MajesticFilter._is_valid_ISO8859_1_str(anchor):
                 #     raise ValueError("anchor contains invalid western language word: {0:s}.".format(anchor,))
                 for spam in self._spam_anchor:
@@ -315,9 +323,12 @@ class MajesticFilter(FilterInterface):
                     if spam in anchor:
                         raise MajesticSpamException("anchor {0:s} is in spam word {1:s}".format(anchor, spam))
                 count += 1
+            # if brand_name_backlinks_count/total > self._max_percentage_for_anchor_text_ratio:
+            #     raise MajesticSpamException("domain name mentioned in achor texts more than {0:.1f}.".format(self._max_percentage_for_anchor_text_ratio*100,))
         if not is_in_anchor:
             #print(anchor_list)
             raise MajesticSpamException("anchor does not have the domain name in top {0:d} results.".format(domain_contain_limit,))
+
         return True
 
     def _filter_ref_domains(self, majestic: MajesticCom, domain: str) -> bool:
@@ -378,22 +389,24 @@ class MajesticFilter(FilterInterface):
                     self._job_done += 1
                     if account is not None:
                         account.Available = True
-                # if data.cf >= self._min_cf and data.tf >= self._min_tf:
-                if is_domain_good:
-                # if data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains:
-                    #print("Majatic output:", data)
-                    # PrintLogger.print("domain: " + data.domain + " is good.")
-                    CsvLogger.log_to_file(self._log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir()) # log this to file
-                    self._output_queue.put(data)
-                    return data
-                elif is_spammed:
-                    CsvLogger.log_to_file(self._bad_log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir())
-                    self._output_queue.put(data)
-                    return data
-                else:
-                    return None
-                    # print("domain: " + data.domain + " has exception:" + data.exception)
+                    # if data.cf >= self._min_cf and data.tf >= self._min_tf:
+                    if is_domain_good:
+                    # if data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains:
+                        #print("Majatic output:", data)
+                        # PrintLogger.print("domain: " + data.domain + " is good.")
+                        CsvLogger.log_to_file(self._log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir()) # log this to file
+                        self._output_queue.put(data)
+                        return data
+                    elif is_spammed:
+                        CsvLogger.log_to_file(self._bad_log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir())
+                        self._output_queue.put(data)
+                        # return data
+                    else:
+                        pass
+                        # return None
+                        # print("domain: " + data.domain + " has exception:" + data.exception)
             else:
-                return None
+                pass
+                # return None
 
 

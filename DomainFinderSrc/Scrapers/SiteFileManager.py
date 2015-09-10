@@ -4,6 +4,7 @@ import threading
 import os
 from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 
+
 class SiteFileManager(object):
     def __init__(self, base_dir_path: str, file_name: str):
         self._dir_path = base_dir_path + "/" + file_name + "/"

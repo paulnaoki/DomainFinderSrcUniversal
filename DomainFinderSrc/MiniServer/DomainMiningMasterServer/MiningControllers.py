@@ -581,6 +581,12 @@ class MiningMasterController(threading.Thread):
                     db = self.get_db_filtered()
                     db.add_sites(results, skip_check=False)
                     db.close()
+            except Exception as ex:
+                ErrorLogger.log_error("MingingMasterController", ex, "process_filtering_output_results() " + self.ref)
+            finally:
+                CsvLogger.log_to_file("filtered_domains.csv", tuples)
+        if len(bad_results) > 0:
+            try:
                 with self._result_bad_db_lock:
                     bad_db = self.get_db_filtered_bad()
                     bad_db.add_sites(bad_results, skip_check=False)

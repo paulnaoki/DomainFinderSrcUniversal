@@ -9,7 +9,8 @@ import random
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
 from DomainFinderSrc.Utilities.Logging import ErrorLogger, PrintLogger, CsvLogger
 import DomainFinderSrc
-from DomainFinderSrc.ArchiveOrg.ProfileExtract import ArchiveStruct, ArchiveOrg
+from DomainFinderSrc.ArchiveOrg.ProfileExtract import ArchiveOrg
+from DomainFinderSrc.ArchiveOrg import ArchiveStruct
 from DomainFinderSrc.Scrapers.TLDs import TldUtility
 import multiprocessing
 
@@ -143,7 +144,7 @@ class MozFilter(FilterInterface):
                     counter += 1
                 self._account_list = self._account_list[0: len(self._proxies) - 1]
 
-        self._max_wait = 150
+        self._max_wait = 60
         self._min_sleep_time = 30
         assert self._max_wait >= self._min_sleep_time, "max rate for moz api is 10s per request"
         FilterInterface.__init__(self, *args, worker_number=len(self._account_list), **kwargs)

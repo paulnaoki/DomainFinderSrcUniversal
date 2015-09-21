@@ -22,10 +22,11 @@ class WebRequestCommonHeader:
                       # 'Accept-Encoding': encoding_accept,
                       # 'Accept': '*/*',
                      }
-    @staticmethod
-    def get_html_header():
-        return WebRequestCommonHeader.html_headers
 
     @staticmethod
-    def get_common_header():
-        return WebRequestCommonHeader.common_headers
+    def get_html_header(user_agent='ia_archiver'):
+        return WebRequestCommonHeader.html_headers.update({'User-Agent': user_agent})
+
+    @staticmethod
+    def get_common_header(user_agent='ia_archiver'):
+        return WebRequestCommonHeader.common_headers.update({'User-Agent': user_agent})

@@ -1,17 +1,23 @@
 from DomainFinderSrc.Utilities import FileIO
 from DomainFinderSrc.Utilities import FilePath
+from DomainFinderSrc.Utilities.Logging import CsvLogger
 import threading
 import os
 from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 
 
 class SiteFileManager(object):
+    HTACCESS_FILE = ".htaccess"
+    ERROR_LOG = "error_log.csv"
     def __init__(self, base_dir_path: str, file_name: str):
         self._dir_path = base_dir_path + "/" + file_name + "/"
         self._file_name = file_name
         self.default_css_folder_path = self._dir_path + "/css/"
         self.default_image_folder_path = self._dir_path + "/images/"
         self.default_js_folder_path = self._dir_path + "/js/"
+        self.htaccess_file_path = self._dir_path + SiteFileManager.HTACCESS_FILE
+        self.change_log_file_path = self._dir_path + SiteFileManager.ERROR_LOG
+        FileIO.FileHandler.clear_dir(self._dir_path)
         self._stop_event = threading.Event()
         self._task_count = 0
         self._task_lock = threading.RLock()
@@ -42,8 +48,17 @@ class SiteFileManager(object):
         else:
             return ''
 
+    def write_to_error_log(self, data: tuple):
+        CsvLogger.log_to_file_path(self.change_log_file_path, [data])
+
+    def write_to_redirect(self, old_path: str, new_path: str):
+        redirect_format = "Redirect 301 {0:s} {1:s}".format(old_path, new_path)
+        FileIO.FileHandler.append_line_to_file(self.htaccess_file_path, redirect_format)
+
     def write_to_file(self, sub_path: str, data, mode="t"):
         if not self._stop_event.is_set() and data is not None:
+            if len(data) == 0:
+                raise ValueError("No Data to write: " + sub_path)
             #self._acquire_task()
             full_path = self._dir_path + sub_path
             full_path = full_path.replace("//", "/")
@@ -59,19 +74,24 @@ class SiteFileManager(object):
                     file.close()
             #self._release_task()
 
-    def download_file(self, sub_path: str, url: str, timeout=5, retries=1, redirect=3):
+    def download_file(self, sub_path: str, url: str, timeout=5, retries=1, redirect=5):
         full_path = self._dir_path + sub_path
         full_path = full_path.replace("//", "/")
+        print("download to file:", full_path)
+        bytes_count = 0
         s = LinkChecker.get_common_request_session(retries=retries, redirect=redirect)
         # NOTE the stream=True parameter
         r = s.get(url, stream=True, timeout=timeout)
         FileIO.FileHandler.create_file_if_not_exist(full_path)
         with open(full_path, 'wb') as f:
             for chunk in r.iter_content(chunk_size=1024):
-                if chunk: # filter out keep-alive new chunks
+                if chunk:  # filter out keep-alive new chunks
                     f.write(chunk)
                     f.flush()
+                bytes_count += len(chunk)
             f.close()
+        if bytes_count == 0:
+            raise ConnectionError("URL broken: " + url)
 
     def set_stop(self):
         self._stop_event.set()

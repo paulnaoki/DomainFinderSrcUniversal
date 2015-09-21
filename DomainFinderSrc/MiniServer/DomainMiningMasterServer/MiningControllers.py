@@ -172,7 +172,7 @@ class MiningMasterController(threading.Thread):
         self._filter_input_queue = Queue()
         self._filter_output_queue = Queue()
         self.filter_process = None
-        self._filter_matrix = FilteredDomainData(tf=15, cf=15, da=15, ref_domains=10, tf_cf_deviation=0.44)
+        self._filter_matrix = FilteredDomainData(tf=15, cf=15, da=10, ref_domains=10, tf_cf_deviation=0.44)
 
     def update_db_stats(self, force_update=False):
         print("update db stats, do not interrupt!")

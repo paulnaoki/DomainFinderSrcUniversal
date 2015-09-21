@@ -165,6 +165,7 @@ class MemoryCheckerThread(Thread):
 
 class MemoryControlPs:
     _sampling_f = 2
+    MEM_CONTROL_EVENT_KEY = "memory_control_terminate_event"  # function with this event will be able to terminate not only via feedback
 
     def __init__(self, func, func_args: Iterable=None, func_kwargs: dict=None,
                  callback=None, mem_limit=200, external_stop_event: Event=None):
@@ -191,6 +192,8 @@ class MemoryControlPs:
         self._finished_lock = RLock()
         self.finished = False
         self._external_stop_event = external_stop_event
+        self._feedback_terminate_event = Event()
+        self._kwargs.update({MemoryControlPs.MEM_CONTROL_EVENT_KEY: self._feedback_terminate_event})
 
     def get_last_state(self):
         return self._last_state
@@ -279,7 +282,8 @@ class MemoryControlPs:
         while True:
             with self._finished_lock:
                 finished = self.finished
-            if (self._external_stop_event is not None and self._external_stop_event.is_set()) or finished:
+            if (self._external_stop_event is not None and self._external_stop_event.is_set()) or finished \
+                    or self._feedback_terminate_event.is_set():
                 #print("external set stop or process finished, stop now")
                 self.kill()
                 break

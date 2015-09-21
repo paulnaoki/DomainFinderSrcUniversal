@@ -32,7 +32,7 @@ class WhoisChecker(FeedbackInterface, ExternalTempInterface, ProgressLogInterfac
         FeedbackInterface.__init__(self, **kwargs)
         ExternalTempInterface.__init__(self)
         self._input_q = input_queue
-        self._output_q = output_queue
+        # self._output_q = output_queue
         self._stop_event = stop_event
         self._internal_stop_event = Event()
         self._max_worker = max_worker
@@ -45,6 +45,7 @@ class WhoisChecker(FeedbackInterface, ExternalTempInterface, ProgressLogInterfac
         self._min_buff_delete_threshold = 100000
         self._speed_penalty_count = 0
         self._finished = False
+        manager, self._output_q = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Output)
         self._db_buffer = ExternalTempDataDiskBuffer("whois_check.db", self, self._internal_stop_event, buf_size=self._max_worker*50,
                                                      terminate_callback=WhoisChecker.terminate_callback, dir_path=dir_path)
         self._populate_with_state()  # FeedbackInterface
@@ -88,7 +89,7 @@ class WhoisChecker(FeedbackInterface, ExternalTempInterface, ProgressLogInterfac
                 #return_obj = OnSiteLink(root_domain, real_response_code, domain_data.link_level, OnSiteLink.TypeOutbound)
                 # if isinstance(self._queue_lock, multiprocessing.RLock):
                 with self._queue_lock:
-                    self._output_q.put(domain_data)
+                    self._output_q.put((domain_data.link, domain_data.response_code))
         except Exception as ex:
             ErrorLogger.log_error("ExternalSiteChecker.WhoisChecker", ex, "_check_whois() " + root_domain)
         finally:
@@ -108,7 +109,7 @@ class WhoisChecker(FeedbackInterface, ExternalTempInterface, ProgressLogInterfac
                 domain_data.link = root_domain
                 domain_data.response_code = real_response_code
                 #return_obj = OnSiteLink(root_domain, real_response_code, domain_data.link_level, OnSiteLink.TypeOutbound)
-                self._output_q.put(domain_data)
+                self._output_q.put((domain_data.link, domain_data.response_code))
         except Exception as ex:
             ErrorLogger.log_error("ExternalSiteChecker.WhoisChecker", ex, "_check_whois() " + root_domain)
         finally:

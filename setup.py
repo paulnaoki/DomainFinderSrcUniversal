@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='DomainFinderSrc',
-    version='1.0.3.9',
+    version='1.0.4.1',
     packages=['DomainFinderSrc', 'DomainFinderSrc.xlrd', 'DomainFinderSrc.MozCom',
               'DomainFinderSrc.Scrapers', 'DomainFinderSrc.Scrapers.SiteTempDataSrc',
               'DomainFinderSrc.ArchiveOrg',
@@ -34,6 +34,7 @@ setup(
         "selenium",
         "tornado",
         "psutil",
+        'shortuuid',
         ],
         # Dependent packages (distributions)
     # requires=[

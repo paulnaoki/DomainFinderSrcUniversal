@@ -151,8 +151,7 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
         self.finished = False
         self.pool = ThreadPool(processes=self.max_prcess)
         #self.pool = multiprocessing.Pool(processes=self.max_prcess)
-        self.output_thread = outputThread(0, self.threadPrfix+"Output", self.stop_event, self.outputQueue,
-                                          delegate=self.output_delegate)
+        self.output_thread = None
         self.job_all = 0
         self.job_done = 0
         self.job_waiting = 0
@@ -207,6 +206,10 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
                 #CsvLogger.log_to_file("ExternalSiteTemp", [(result.link, result.response_code), ])
             elif isinstance(result, str):
                 self.temp_results.append(result)
+            elif isinstance(result, tuple) and len(result) == 2:
+                temp = OnSiteLink(result[0], result[1])
+                print("new domain:", temp)
+                self.temp_results.append(temp)
             else:
                 pass
 
@@ -305,12 +308,16 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
         self.whois_process.start()
 
     def run(self):
+        self.whois_queue_process.start()
         whois_thread = Thread(target=self.checking_whois)
         trash_clean_thread = Thread(target=self.clear_trash)
+        manager, self.outputQueue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Output)
+        self.output_thread = outputThread(0, self.threadPrfix+"Output", self.stop_event, self.outputQueue,
+                                  delegate=self.output_delegate)
         self.output_thread.start()
         trash_clean_thread.start()
         whois_thread.start()
-        self.whois_queue_process.start()
+        # self.whois_queue_process.start()
         self.input_iter.func_kwarg = SiteThreadChecker.get_input_parameter(full_link="", # this parameter will be updated in self.input_iter
                                                                            max_page=self.max_page_per_site,
                                                                            max_level=self.page_max_level,

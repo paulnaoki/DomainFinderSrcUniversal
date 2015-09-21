@@ -26,7 +26,7 @@ class MozCom:
 
     # check example for more at https://github.com/seomoz/SEOmozAPISamples/blob/master/php/signed_authentication_sample.php
     def get_ranking_data(self, link: str) -> int:
-        exprire = int(time.time()) + 300 #expired in 5 mins
+        exprire = int(time.time()) + 30 #expired in 0.5 mins
         str_to_sign = self.account.AccessID + "\n" + str(exprire)
         #keyBytes =  array.array('B', self.account.APIKey) # [elem.encode("hex") for elem in self.account.APIKey]
         signatureStr = hmac.new(self.account.APIKey.encode(), str_to_sign.encode(), sha1).digest()

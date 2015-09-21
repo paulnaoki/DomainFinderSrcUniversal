@@ -12,11 +12,14 @@ import datetime
 from DomainFinderSrc.Utilities.Logging import ErrorLogger
 import re
 import bs4
+from urllib import robotparser
+import shortuuid
 
 
 class ResponseCode:
     LinkOK = 200
     LinkRedirect = 301
+    LinkFound = 302
     LinkError = 404
     DNSError = 999
     NoDNSError = 998
@@ -65,8 +68,8 @@ class LinkChecker:
                      ".json", ".tar.gz", ".tar.bz2", ".a", ".ar", ".cpio", ".shar", ".iso", ".lbr", ".mar", ".tar",
                      ".bz2", ".f", ".gz", ".7z", ".s7z", ".ace", ".dmg", ".jar", ".apk"]
     common_img_ex = [".jpg", ".png", ".jpeg", ".bmp", ".ico", ".gif"]
-    common_html_page_ex = [".html", ".htm", ".xhtml", ".jhtml", ".shtml", ".asp", ".pl", ".cgi"
-                           ".jsp", ".jspx", ".php", ".awp", ".stm,", ".jspa", ".xml", ".aspx"]
+    common_html_page_ex = [".html", ".htm", ".xhtml", ".jhtml", ".shtml", ".asp", ".pl",
+                           ".jsp", ".jspx", ".php", ".awp", ".stm,", ".jspa", ".aspx"]
     common_font_ex = [".eot", ".woff", ".ttf", ".svg", ".otf", ".ttc", ]
     #forbidden_list = ["google.", "twitter.", "yahoo.", "facebook.", "microsoft.", "youtube.", "baidu.", "taobao.",
      #                 "linkedin.", "pinterest.", "tumblr.", "instagram.", "vk.", "flickr.", "wikipedia.org", "bbc."]
@@ -80,6 +83,47 @@ class LinkChecker:
         s.max_redirects = redirect
         s.mount('http', adapter=a)
         return s
+
+    @staticmethod
+    def get_robot_agent(root_domain: str, protocol="http") -> robotparser.RobotFileParser:
+        suffix = "/robots.txt"
+        temp_link = protocol + "://" + root_domain + suffix
+        try:
+            status_code, content_type = LinkChecker.get_response(temp_link)
+            if status_code == ResponseCode.LinkOK:
+                robot = robotparser.RobotFileParser(url=temp_link)
+                robot.read()
+                return robot
+            elif root_domain.startswith("www"):
+                return None
+            else:
+                return LinkChecker.get_robot_agent("www." + root_domain, protocol)
+        except:
+            return None
+
+    @staticmethod
+    def get_shorter_url_path(link_path: str) ->(str, str):
+
+        def get_shorter_path(original_path: str) -> (str, str):
+            begin_with_slice = True
+            end_with_slice = True
+            if not original_path.startswith("/"):
+                begin_with_slice = False
+            if not original_path.endswith("/"):
+                end_with_slice = False
+            ext = LinkChecker.get_link_extension(original_path)
+            trimmed = original_path.lstrip("/").rstrip(ext)
+            shortened = shortuuid.uuid(name=trimmed)
+            shortened = shortened if not begin_with_slice else "/" + shortened
+            return shortened if not end_with_slice else shortened + "/", ext
+
+        if link_path.startswith("http"):
+            scheme, netloc, path, query, fra = urlsplit(link_path)
+            short_path, ext = get_shorter_path("/" + path)
+            return scheme + "://" + netloc + short_path, ext
+        else:
+            return get_shorter_path(link_path)
+
 
     @staticmethod
     def get_domain_link(full_link: str)->str:
@@ -407,7 +451,7 @@ class LinkChecker:
                 return True
 
     @staticmethod
-    def get_response(link: str, timeout: int=5) -> (int, str):
+    def get_response(link: str, timeout: int=5, agent=WebRequestCommonHeader.user_agent) -> (int, str):
         """
         :param link: link to check
         :param timeout: set timeout to stop stuck here forever
@@ -416,7 +460,8 @@ class LinkChecker:
         return_obj = ResponseCode.DNSError, "unknown"
         s = LinkChecker.get_common_request_session()
         try:
-            req = s.head(link, allow_redirects=True, timeout=timeout, headers=WebRequestCommonHeader.get_html_header())
+            req = s.head(link, allow_redirects=True, timeout=timeout,
+                         headers=WebRequestCommonHeader.get_html_header(user_agent=agent))
             content_type = req.headers["content-type"]
             return_obj = req.status_code, content_type
         except:
@@ -462,11 +507,11 @@ class LinkChecker:
             return return_obj
 
     @staticmethod
-    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2) -> Response:
+    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2, agent=WebRequestCommonHeader.user_agent) -> Response:
         s = LinkChecker.get_common_request_session(retries=retries, redirect=redirect)
         return_obj = None
         try:
-            return_obj = s.get(link, headers=WebRequestCommonHeader.get_html_header(), timeout=timeout)
+            return_obj = s.get(link, headers=WebRequestCommonHeader.get_html_header(user_agent=agent), timeout=timeout)
             #if isinstance(content, Response):
                 # if raw_data:
                 #     content.text

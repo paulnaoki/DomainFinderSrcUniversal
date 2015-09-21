@@ -69,6 +69,7 @@ DomainFinderSrc/UserAccountSettings/__init__.py
 DomainFinderSrc/Utilities/Dispatcher.py
 DomainFinderSrc/Utilities/FileIO.py
 DomainFinderSrc/Utilities/FilePath.py
+DomainFinderSrc/Utilities/ImageMatrixFilter.py
 DomainFinderSrc/Utilities/Logging.py
 DomainFinderSrc/Utilities/MachineInfo.py
 DomainFinderSrc/Utilities/MemoryControlProcess.py

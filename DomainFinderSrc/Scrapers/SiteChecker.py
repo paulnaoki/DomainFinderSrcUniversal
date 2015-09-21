@@ -1,4 +1,5 @@
 from urllib.parse import urlsplit
+from urllib import robotparser
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.SiteTempDataSrcInterface import *
 import bs4
 from DomainFinderSrc.Scrapers.LinkChecker import ResponseCode, LinkChecker
@@ -66,7 +67,8 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
     def __init__(self, full_link: str="", data_source: SiteTempDataSrcInterface=None,
                  controller: SiteCheckerController=None,
                  max_level=10, max_page=1000, delegate=None, output_buff_size=2000,
-                 output_queue=None, output_all_external=False, result_delegate=None, **kwargs):
+                 output_queue=None, output_all_external=False, result_delegate=None, memory_control_terminate_event=None,
+                 **kwargs):
         """
         :param full_link: The full link of a domain, e.g: https://www.google.co.uk
         :param domain: domain to crawl
@@ -74,6 +76,7 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         :param max_page: maximum pages to check within a site, also stop crawling
         :param delegate: if this is not None, then it will send the latest result of external domain of ResponseCode==404 or 999
         :param result_delegate: send site_info upon finish
+        :param memory_control_terminate_event: if this is not None and being set, it will be able to terminate an external memory controlled process.
         :return:
         """
         FeedbackInterface.__init__(self, **kwargs)
@@ -113,6 +116,8 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
                                                               buf_size=int(output_buff_size/2),
                                                               dir_path=get_db_buffer_default_dir(),
                                                               convert_output=False)
+        self._external_db_buffer.append_to_buffer([(self.root_domain, ResponseCode.DNSError),], convert_tuple=False)
+        self._memory_control_terminate_event = memory_control_terminate_event
         self.task_control_lock = threading.RLock()
         if data_source is None:
             #self.data_source = SiteTempDataDisk(self.root_domain, ref_obj=self)
@@ -146,7 +151,8 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self.external_link_check_lock = threading.RLock()
         self._finihsed = False
         self.task_control_max = 1
-
+        self.agent = "ia_archiver"
+        self.robot_agent = LinkChecker.get_robot_agent(self.root_domain, protocol=self.scheme)
         self.task_control_counter = 1
         self._speed_penalty_count = 0
         self._speed_penalty_threshold = 10
@@ -271,14 +277,18 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         if self.page_count - self._page_count_shadow <= self._speed_penalty_threshold:  # determine if site is slow
             self._speed_penalty_count += 1
             if self._speed_penalty_count > 2:
-                ErrorLogger.log_error("SiteChecker", TimeoutError("slow processing speed, terminated."), self.orginal_link)
                 self.data_source.set_continue_lock(False)
+                if self._memory_control_terminate_event is not None:
+                    ErrorLogger.log_error("SiteChecker", TimeoutError("slow processing speed, terminated."), self.orginal_link)
+                    self._memory_control_terminate_event.set()
         else:
             self._speed_penalty_count = 0
 
         if self.page_count == self._page_count_shadow and data_source_count == self._all_page_count_shadow:  # determine if site is stucked
-            ErrorLogger.log_error("SiteChecker", TimeoutError("speed is zero, terminated."), self.orginal_link)
             self.data_source.set_continue_lock(False)
+            if self._memory_control_terminate_event is not None:
+                ErrorLogger.log_error("SiteChecker", TimeoutError("speed is zero, terminated."), self.orginal_link)
+                self._memory_control_terminate_event.set()
 
         self._page_count_shadow = self.page_count
         self._all_page_count_shadow = data_source_count
@@ -545,7 +555,9 @@ class PageChecker:
         internal_pages = []
         external_pages = []
 
-
+        if isinstance(checker.robot_agent, robotparser.RobotFileParser):
+            if not checker.robot_agent.can_fetch(useragent=checker.agent, url=page.link):
+                return [], []
         #print("checking internal_page", page)
         use_lxml_parser = checker.use_lxml_parser()
         response = LinkChecker.get_page_source(page.link, timeout)

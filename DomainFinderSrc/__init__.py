@@ -1,3 +1,3 @@
 # Flags
 
-IS_DEBUG = False
+IS_DEBUG = True

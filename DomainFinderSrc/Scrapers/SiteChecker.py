@@ -158,20 +158,27 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self._speed_penalty_threshold = 10
         self._progress_logging_speed = 120
         self._output_frequency = 1000
+        self._death_wish_sent = False
         SiteChecker._is_lxml_parser_exist()
+        self._output_thread = None
         self.progress_logger = ProgressLogger(self._progress_logging_speed, self, self._stop_event)
         self._status = "Start"
         self._populate_with_state()  # restore laste known state
         # self.data_source.additional_startup_procedures()  # use the data set in self._populate_with_state() to start
 
+    # def _empty_external_links_db(self):
+    #     if self.output_queue is not None:
+
     def _get_external_links_to_queue(self):
         interval = 1/self._output_frequency
         manager, result_queue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Input)
+        self.output_queue = result_queue  # override output_queue
         if result_queue is None:
             ErrorLogger.log_error("SiteChecker._get_external_links_to_queue()", ValueError("result queue is none, cannot put item in queue."))
         else:
             for item in self._external_db_buffer:
-                if self._stop_event.is_set() and self.external_links_checked >= self._external_db_buffer.count_all():
+                if self.external_links_checked >= self._external_db_buffer.count_all():
+                # if self._stop_event.is_set() and self.external_links_checked >= self._external_db_buffer.count_all():
                     break
                 elif isinstance(item, tuple):
                 #elif self.output_queue is not None and isinstance(item, tuple):
@@ -277,18 +284,14 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         if self.page_count - self._page_count_shadow <= self._speed_penalty_threshold:  # determine if site is slow
             self._speed_penalty_count += 1
             if self._speed_penalty_count > 2:
-                self.data_source.set_continue_lock(False)
-                if self._memory_control_terminate_event is not None:
-                    ErrorLogger.log_error("SiteChecker", TimeoutError("slow processing speed, terminated."), self.orginal_link)
-                    self._memory_control_terminate_event.set()
+                self._status = "Stopped"
+                self.sudden_death()
         else:
             self._speed_penalty_count = 0
 
         if self.page_count == self._page_count_shadow and data_source_count == self._all_page_count_shadow:  # determine if site is stucked
-            self.data_source.set_continue_lock(False)
-            if self._memory_control_terminate_event is not None:
-                ErrorLogger.log_error("SiteChecker", TimeoutError("speed is zero, terminated."), self.orginal_link)
-                self._memory_control_terminate_event.set()
+            self._status = "Stopped"
+            self.sudden_death()
 
         self._page_count_shadow = self.page_count
         self._all_page_count_shadow = data_source_count
@@ -323,6 +326,7 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         pass
 
     def stop(self):
+        # natural stop
         self._status = "Stopped"
         self.progress_logger.report_progress()
         self._stop_event.set()
@@ -343,7 +347,7 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
     def release_task(self, new_page: int):
         with self.task_control_lock:
             if self.page_need_look_up == 1 and new_page == 0:
-                print("set to stop data source")
+                PrintLogger.print("set to stop data source")
                 self.data_source.set_continue_lock(False)
             else:
                 self.page_count += 1
@@ -434,7 +438,7 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         return True if link in self.cache_list else False
 
     def reset_as(self, domain: str, link: str=""):  # reset the target domain
-        print("crawl reset as: "+domain)
+        PrintLogger.print("crawl reset as: "+domain)
         self.domain = domain
         self.domain_link = self.scheme + "://" + self.domain
         self.page_count = 0
@@ -455,11 +459,11 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
 
     def crawling(self):  # call this method to start operation
         self._start_sending_feedback()
-        output_op = threading.Thread(target=self._get_external_links_to_queue)
+        self._output_thread = threading.Thread(target=self._get_external_links_to_queue)
         if self.data_source.can_continue():
             self.data_source.additional_startup_procedures()  # use the data set in self._populate_with_state() to start
             self._external_db_buffer.start_input_output_cycle()
-            output_op.start()
+            self._output_thread.start()
             self.progress_logger.start()
             self.progress_logger.report_progress()  # log first row
             self._status = "Work"
@@ -474,15 +478,37 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
 
             self.stop()
             self.clear()
-            if output_op.is_alive():
-                output_op.join()
+            if self._output_thread.is_alive():
+                self._output_thread.join()
             self.data_source.additional_finish_procedures()
             self._external_db_buffer.terminate()
-        PrintLogger.print("finished: "+self.domain_link)
+        PrintLogger.print("finished naturally: "+self.domain_link)
         self._finihsed = True
             #calling this at the end of operation
         PrintLogger.print("send last response")
         self._end_sending_feedback()
+        if self._memory_control_terminate_event is not None:
+            self._memory_control_terminate_event.set()
+
+    def sudden_death(self):
+        if not self._finihsed:
+            self._finihsed = True
+            PrintLogger.print("start sudden death: "+self.orginal_link)
+            #self.stop()
+            self._stop_event.set()
+            if isinstance(self._output_thread, threading.Thread):
+                if self._output_thread.is_alive():
+                    self._output_thread.join()
+            self.clear()
+            self.data_source.set_continue_lock(False)
+            self.data_source.additional_finish_procedures()
+            self._external_db_buffer.terminate()
+                #calling this at the end of operation
+            PrintLogger.print("send last response")
+            self._end_sending_feedback()
+            if self._memory_control_terminate_event is not None:
+                ErrorLogger.log_error("SiteChecker", TimeoutError("slow processing speed, terminated."), self.orginal_link)
+                self._memory_control_terminate_event.set()
 
     def begin_crawl(self, level=0):  # subclass this to make different behaviour
         pass

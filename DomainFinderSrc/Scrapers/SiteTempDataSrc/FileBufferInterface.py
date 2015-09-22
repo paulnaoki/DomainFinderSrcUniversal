@@ -279,7 +279,7 @@ class FileBuffInterface:
                 if current_time - ref_time > self._update_record_period:
                     ref_time = current_time
                     self._total_record = self.update_total_in_file()
-                    print("FileBufferInterface in datasource total record is:", self._total_record, "progress is:", progress)
+                    print("FileBufferInterface in datasource", self._file_name, " total record is:", self._total_record, "progress is:", progress)
             time.sleep(1)
         if file is not None:
             self.close_file_object(file)

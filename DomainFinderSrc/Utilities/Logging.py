@@ -160,13 +160,17 @@ class ProgressLogger(threading.Thread):
         call this method to write progress data to the log file
         :return:
         """
-        self._ref_time = time.time()
-        dispatcher = TimeoutDispatcher(self._ref.get_progress, timeout=10)
-        progress = dispatcher.dispatch()
-        if progress is not None:
-            data = [self.limit_counter, int((self._ref_time - self.begin_time)/60)] + progress
-            self._append(data)
-            self.limit_counter += 1
+        try:
+            self._ref_time = time.time()
+            dispatcher = TimeoutDispatcher(self._ref.get_progress, timeout=10)
+            progress = dispatcher.dispatch()
+            if progress is not None:
+                data = [self.limit_counter, int((self._ref_time - self.begin_time)/60)] + progress
+                self._append(data)
+                self.limit_counter += 1
+        except Exception as ex:
+            PrintLogger.print("ProgressLogger.report_progress()" + str(ex))
+            ErrorLogger.log_error("ProgressLogger.report_progress()", ex)
 
     def run(self):
         FileHandler.create_file_if_not_exist(self._file_path)

@@ -45,7 +45,7 @@ class ArchiveExplorer:
             raise ValueError("ArchiveExplorer.__init__: download_base_dir cannot be None.")
         self._file_manager = SiteFileManager(base_dir_path=FilePath.get_default_archive_dir(), file_name=original_domain)
         self._file_manager.write_to_error_log(LinkAttrs.get_titles())
-        self._max_redirect = 5
+        self._max_redirect = 10
         self._max_retries = 2
         self._pool = None
         self._sync_lock = threading.RLock()

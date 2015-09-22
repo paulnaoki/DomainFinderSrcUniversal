@@ -51,6 +51,7 @@ class ExternalTempDataDiskBuffer(FileBuffInterface):
         else:
             self._file_dir = get_temp_db_dir()
         self._file_path = self._file_dir + self._file_name
+        PrintLogger.print("ExternalTempDataDiskBuffer create path in init: " + self._file_path)
         FileHandler.create_file_if_not_exist(self._file_path)
         self.stop_event = stop_event
         self._tab = table_name

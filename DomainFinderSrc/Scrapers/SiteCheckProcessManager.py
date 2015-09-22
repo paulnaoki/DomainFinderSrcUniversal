@@ -106,6 +106,7 @@ def run_queue_server():
 
 class SiteCheckProcessManager(Thread, SiteCheckerController):
     MEM_MINIMUM_REQ = 100
+
     def __init__(self, job_name: str="", input_Q:multiprocessing.Queue=None, max_procss=4, concurrent_page=1,
                  page_max_level=10, max_page_per_site=1000, output_delegate=None,
                  memory_limit_per_process=100, **kwargs):
@@ -263,7 +264,7 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
     def process_site_info(self, site_info):
         if site_info is not None:
             with self.site_info_lock:
-                #print("new site info: ", site_info.__dict__)
+                PrintLogger.print("finished site info: " + str(site_info.__dict__))
                 self.site_info.append(site_info)
 
     def process_feedback(self, feedback: SiteFeedback):

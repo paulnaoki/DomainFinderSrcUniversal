@@ -4,6 +4,7 @@ from threading import RLock, Thread
 import time
 from DomainFinderSrc.Utilities.MachineInfo import MachineInfo
 from collections import Iterable
+from DomainFinderSrc.Utilities.Logging import PrintLogger
 
 
 class ContinFucFeedback:
@@ -168,7 +169,7 @@ class MemoryControlPs:
     MEM_CONTROL_EVENT_KEY = "memory_control_terminate_event"  # function with this event will be able to terminate not only via feedback
 
     def __init__(self, func, func_args: Iterable=None, func_kwargs: dict=None,
-                 callback=None, mem_limit=200, external_stop_event: Event=None):
+                 callback=None,  mem_limit=200, external_stop_event: Event=None):
         self._func = func
         self.callback = callback
         self._mem_limit = mem_limit
@@ -242,6 +243,16 @@ class MemoryControlPs:
                 time.sleep(wait_t)
         #print("start end feedback")
 
+    def empty_feedback_queue(self):
+        try:
+            PrintLogger.print("in MemoryControlPs: trying to empty queue")
+            while not self._feedback_queue.empty():
+                obj = self._feedback_queue.get(block=False, timeout=0.001)
+                if obj is not None:
+                    self.memory_limit_callback(obj)
+        except Exception as ex:
+            PrintLogger.print("in MemoryControlPs.empty_feedback_queue()" + str(ex))
+
     def kill(self):  # kill the process
         if self._inner_process.is_alive():
             with self._res_lock:
@@ -285,6 +296,8 @@ class MemoryControlPs:
             if (self._external_stop_event is not None and self._external_stop_event.is_set()) or finished \
                     or self._feedback_terminate_event.is_set():
                 #print("external set stop or process finished, stop now")
+                time.sleep(2)  # wait for data passing through the queue at max 2 s
+                self.empty_feedback_queue()
                 self.kill()
                 break
             with self._exceed_lock:

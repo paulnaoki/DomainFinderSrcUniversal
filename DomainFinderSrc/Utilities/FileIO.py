@@ -17,6 +17,7 @@ class FileHandler:
 
     @staticmethod
     def create_file_if_not_exist(file_path: str):
+
         if not os.path.exists(os.path.dirname(file_path)):
             os.makedirs(os.path.dirname(file_path))
 

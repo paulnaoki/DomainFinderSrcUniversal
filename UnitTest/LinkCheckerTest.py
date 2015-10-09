@@ -3,13 +3,14 @@ from unittest import TestCase
 from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 from urllib import parse, robotparser
 import shortuuid
+from reppy.cache import RobotsCache
 
 
 class LinkCheckerTest(TestCase):
     def testGetAgent(self):
-        root_domain = "iristronics.com"
+        root_domain = "halifaxnational.com"
         agent = LinkChecker.get_robot_agent(root_domain)
-        can_fetch = agent.can_fetch("*", "http://iristronics.com/somethin")
+        can_fetch = agent.can_fetch("*", "http://halifaxnational.com/somethin")
         print(agent,"can fetch:", can_fetch)
 
     def test_get_all_links(self):
@@ -37,6 +38,22 @@ class LinkCheckerTest(TestCase):
                 print("count:", i, "can fetch:", rp.can_fetch("*", "http://www.bbc.co.uk/fafdjiaofpadpvhagaarga/news/agqrgfv/y"))
         else:
             print("domain is not available.")
+
+    def testRobot3(self):
+        robots = RobotsCache()
+        rules = robots.fetch("http://www.seobook.com//")
+        crawl_delay = rules.delay("idiot")
+        print("delay is:", crawl_delay)
+        for i in range(1, 1000):
+            print(rules.allowed("http://api.google.com/search/", agent="idiot"))
+
+    def testRobot4(self):
+        #rules = LinkChecker.get_robot_agent("sbnet.se")
+        rules = LinkChecker.get_robot_agent("seobook.com")
+        crawl_delay = rules.delay("idiot")
+        print("delay is:", crawl_delay)
+        for i in range(1, 1000):
+            print(rules.allowed("http://api.google.com/search/", agent="idiot"))
 
     def testShortUrl1(self):
         # url = "/web/20130603113639/http://gamblingaddiction.cc/salendine-%e0%b8%99%e0%b8%b8%e0%b9%8a%e0%b8%81%e0%b8%a5%e0%b8%b4%e0%b8%99%e0%b8%94%e0%b9%8c%e0%b8%a1%e0%b8%b2%e0%b8%a3%e0%b9%8c%e0%b8%8a%e0%b8%82%e0%b9%88%e0%b8%b2%e0%b8%a7%e0%b8%a3%e0%b8%b4%e0%b8%9f.html"

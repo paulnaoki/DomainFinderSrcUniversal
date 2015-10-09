@@ -1,18 +1,19 @@
-from DomainFinderSrc.MozCom import *
-from DomainFinderSrc.MajesticCom import *
-from DomainFinderSrc.Utilities import FilePath, FileIO
 from multiprocessing import Queue, Event
 from multiprocessing.pool import ThreadPool
 import threading
-from DomainFinderSrc.SiteConst import *
 import random
+import multiprocessing
+
+from DomainFinderSrc.MozCom import *
+
+from DomainFinderSrc.MajesticCom import *
+from DomainFinderSrc.Utilities import FilePath, FileIO
+from DomainFinderSrc.SiteConst import *
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
 from DomainFinderSrc.Utilities.Logging import ErrorLogger, PrintLogger, CsvLogger
 import DomainFinderSrc
 from DomainFinderSrc.ArchiveOrg.ProfileExtract import ArchiveOrg
-from DomainFinderSrc.ArchiveOrg import ArchiveStruct
 from DomainFinderSrc.Scrapers.TLDs import TldUtility
-import multiprocessing
 
 
 class FilterInterface(threading.Thread):

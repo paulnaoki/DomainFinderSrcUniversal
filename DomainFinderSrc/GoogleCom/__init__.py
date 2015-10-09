@@ -12,7 +12,8 @@ from DomainFinderSrc.Scrapers.SeekSiteGenerator import *
 class GoogleConst:
     SearchLink = "https://www.google.com/search?q=%s&num=%d&start=%d"
     SearchKeyword = "http://suggestqueries.google.com/complete/search?output=toolbar&hl=en&format=firefox&q={0:s}"
-    SitePath = "._Rm"  # use CSS selector
+    # SitePath = "._Rm"  # use CSS selector
+    SitePath = "cite"
     Result100 = 100
     Result50 = 50
     Result20 = 20
@@ -37,7 +38,7 @@ class GoogleCom(SeedSiteGeneratorInterface):
         prefix = "www."
         search_query = (GoogleConst.SearchLink + addtional_query_parameter) % (quote(keyword), resultPerPage, (page_number - 1) * resultPerPage)
         try:
-            req = requests.get(search_query, timeout=timeout, headers=WebRequestCommonHeader.get_html_header())
+            req = requests.get(search_query, timeout=timeout, headers=WebRequestCommonHeader.get_html_header(user_agent=WebRequestCommonHeader.webpage_agent))
             result = req.text
             soup = bs4.BeautifulSoup(result)
             tags = soup.select(GoogleConst.SitePath)
@@ -46,9 +47,9 @@ class GoogleCom(SeedSiteGeneratorInterface):
                 try:
                     domain = tag.text.strip().replace(" ", "")
                     if return_domain_home_only:
-                        domain = LinkChecker.get_root_domain(domain)[2] #get the link
+                        domain = LinkChecker.get_root_domain(domain, use_www=False)[2] #get the link
                     else:
-                        domain = LinkChecker.get_root_domain(domain)[3]
+                        domain = LinkChecker.get_root_domain(domain, use_www=False)[3]
                     if use_forbidden_filter and LinkChecker.is_domain_forbidden(domain):
                         continue
                     if len(domain) > 0:

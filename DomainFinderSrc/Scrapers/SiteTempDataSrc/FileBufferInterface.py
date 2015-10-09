@@ -305,6 +305,6 @@ class FileBuffInterface:
         if self._output_t.is_alive():
             self._output_t.join()
         #print("output cycle stopped")
-        if self._power_save_mode:
+        if self._power_save_mode and self._power_save_t.is_alive():
             self._power_save_t.join()
         #print("power save cycle stopped")

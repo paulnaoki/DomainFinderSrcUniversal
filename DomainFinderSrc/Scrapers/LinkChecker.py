@@ -14,6 +14,8 @@ import re
 import bs4
 from urllib import robotparser
 import shortuuid
+from reppy.cache import RobotsCache
+from reppy.parser import Rules
 
 
 class ResponseCode:
@@ -85,7 +87,7 @@ class LinkChecker:
         return s
 
     @staticmethod
-    def get_robot_agent(root_domain: str, protocol="http") -> robotparser.RobotFileParser:
+    def get_robot_agent_v1(root_domain: str, protocol="http") -> robotparser.RobotFileParser:
         suffix = "/robots.txt"
         temp_link = protocol + "://" + root_domain + suffix
         try:
@@ -94,6 +96,24 @@ class LinkChecker:
                 robot = robotparser.RobotFileParser(url=temp_link)
                 robot.read()
                 return robot
+            elif root_domain.startswith("www"):
+                return None
+            else:
+                return LinkChecker.get_robot_agent_v1("www." + root_domain, protocol)
+        except:
+            return None
+
+    @staticmethod
+    def get_robot_agent(root_domain: str, protocol="http") -> Rules:
+        suffix = "/robots.txt"
+        temp_link = protocol + "://" + root_domain
+        robot_link = temp_link + suffix
+        try:
+            status_code, content_type = LinkChecker.get_response(temp_link)
+            if status_code == ResponseCode.LinkOK:
+                robots = RobotsCache()
+                rules = robots.fetch(temp_link)
+                return rules
             elif root_domain.startswith("www"):
                 return None
             else:
@@ -153,7 +173,7 @@ class LinkChecker:
         if len(ext.domain) == 0 or len(ext.suffix) == 0:
             return False, "", "", "", "", "", ""
         elif ext.subdomain is None or len(ext.subdomain) == 0:
-            if use_www:
+            if use_www and prefix not in full_link:
                 return True, root, scheme+prefix+root, scheme+prefix+root, prefix+root, ext.suffix, ext.domain
             else:
                 return True, root, scheme+root, scheme+root, root, ext.suffix, ext.domain
@@ -451,7 +471,7 @@ class LinkChecker:
                 return True
 
     @staticmethod
-    def get_response(link: str, timeout: int=5, agent=WebRequestCommonHeader.user_agent) -> (int, str):
+    def get_response(link: str, timeout: int=5, agent=WebRequestCommonHeader.crawler_agent) -> (int, str):
         """
         :param link: link to check
         :param timeout: set timeout to stop stuck here forever
@@ -507,7 +527,7 @@ class LinkChecker:
             return return_obj
 
     @staticmethod
-    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2, agent=WebRequestCommonHeader.user_agent) -> Response:
+    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2, agent=WebRequestCommonHeader.crawler_agent) -> Response:
         s = LinkChecker.get_common_request_session(retries=retries, redirect=redirect)
         return_obj = None
         try:

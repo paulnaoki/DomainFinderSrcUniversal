@@ -1,13 +1,12 @@
+from multiprocessing import Event
+import queue
 from unittest import TestCase
 from DomainFinderSrc.MajesticCom import *
 from DomainFinderSrc.SiteConst import *
 from DomainFinderSrc.Scrapers.MatrixFilter import MajesticFilter
-from multiprocessing import Event
-import re
-import queue
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
-from DomainFinderSrc.Utilities import FilePath, FileIO
-
+from DomainFinderSrc.Utilities import FileIO, Logging
+from DomainFinderSrc.ComboSites.GoogleMajetic import GoogleMajestic, GoogleCom
 
 account = SiteAccount(siteType=AccountType.Majestic, userID="will@bazookasearch.com", password="baltimore9!",
                       APIkey="1BB1D141D20CAF35D331F086F55C1CEE")
@@ -29,6 +28,11 @@ def convert_to_regular_expression(keyword: str):
     if is_valid_ISO8859_1_str(keyword):
         pass
 
+
+def backlink_callback(backlink: MajesticBacklinkDataStruct):
+    logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3.csv"
+    print(backlink)
+    Logging.CsvLogger.log_to_file_path(logging_path, [backlink.to_tuple(), ])
 
 class MajesticTest(TestCase):
 
@@ -145,3 +149,44 @@ class MajesticTest(TestCase):
         anchorTexts = [x[0] for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
         for anchor in anchorTexts:
             print(anchor)
+
+    def testGetBacklinks(self):
+        domain = "bufinserv.co.uk"
+        max_count = 10
+        niche = ""
+        # niche = "Business/Financial Services"
+        backlinks = majestic.get_backlinks(domain, max_count=max_count, topic=niche, is_dev=False)
+        for item in backlinks:
+            print(item)
+
+    def testGetBackLinks2(self):
+        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling2.csv"
+        FileHandler.create_file_if_not_exist(logging_path)
+        Logging.CsvLogger.log_to_file_path(logging_path, [MajesticBacklinkDataStruct.get_tilte(), ])
+        max_count = 100
+        niche = "Games/Gambling"
+        # niche = "Business/Financial Services"
+        sites = GoogleCom.get_sites(keyword="gambling", index=0)
+        backlinks = GoogleMajestic.get_sites_by_seed_sites(majestic, sites, topic=niche, iteration=0, count_per_domain=max_count)
+        for item in backlinks:
+            if isinstance(item, MajesticBacklinkDataStruct):
+                print(item)
+                Logging.CsvLogger.log_to_file_path(logging_path, [item.to_tuple(), ])
+
+    def testGetBackLinks3(self):
+        file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GamblingSeed1.txt"
+        sites = FileHandler.read_lines_from_file(file_path)
+        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3.csv"
+        FileHandler.create_file_if_not_exist(logging_path)
+        # Logging.CsvLogger.log_to_file_path(logging_path, [MajesticBacklinkDataStruct.get_tilte(), ])
+        max_count = 2000
+        # niche = "Games/Gambling"
+        # niche = "Business/Financial Services"
+        niche = ""
+        #sites = GoogleCom.get_sites(keyword="gambling", index=0)
+        backlinks = GoogleMajestic.get_sites_by_seed_sites(majestic, sites, topic=niche, iteration=0,
+                                                           count_per_domain=max_count, callback=backlink_callback)
+        # for item in backlinks:
+        #     if isinstance(item, MajesticBacklinkDataStruct):
+        #         print(item)
+        #         Logging.CsvLogger.log_to_file_path(logging_path, [item.to_tuple(), ])

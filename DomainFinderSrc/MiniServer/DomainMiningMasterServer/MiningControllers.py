@@ -173,6 +173,7 @@ class MiningMasterController(threading.Thread):
         self._filter_output_queue = Queue()
         self.filter_process = None
         self._filter_matrix = FilteredDomainData(tf=15, cf=15, da=10, ref_domains=10, tf_cf_deviation=0.44)
+        self._majestic_filter_on = False
 
     def update_db_stats(self, force_update=False):
         print("update db stats, do not interrupt!")
@@ -652,7 +653,8 @@ class MiningMasterController(threading.Thread):
         self.filter_process = MemoryControlPs(func=filtering_process,
                                          func_kwargs=FilterController.get_input_parameters("filtering.db", get_db_buffer_default_dir(), self._filter_input_queue,
                                                                                            self._filter_output_queue, self._stop_event,
-                                                                                           self._filter_matrix),
+                                                                                           self._filter_matrix,
+                                                                                           self._majestic_filter_on),
                                          external_stop_event=self._stop_event)
         self.filter_process.start()
 

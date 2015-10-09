@@ -1,5 +1,6 @@
 from urllib.parse import urlsplit
 from urllib import robotparser
+from reppy.parser import Rules
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.SiteTempDataSrcInterface import *
 import bs4
 from DomainFinderSrc.Scrapers.LinkChecker import ResponseCode, LinkChecker
@@ -67,7 +68,8 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
     def __init__(self, full_link: str="", data_source: SiteTempDataSrcInterface=None,
                  controller: SiteCheckerController=None,
                  max_level=10, max_page=1000, delegate=None, output_buff_size=2000,
-                 output_queue=None, output_all_external=False, result_delegate=None, memory_control_terminate_event=None,
+                 output_queue=None, output_all_external=False, result_delegate=None,
+                 memory_control_terminate_event=None, check_robot_text=True,
                  **kwargs):
         """
         :param full_link: The full link of a domain, e.g: https://www.google.co.uk
@@ -151,8 +153,19 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self.external_link_check_lock = threading.RLock()
         self._finihsed = False
         self.task_control_max = 1
-        self.agent = "ia_archiver"
-        self.robot_agent = LinkChecker.get_robot_agent(self.root_domain, protocol=self.scheme)
+        self.agent = "LightNoHarmBot -- hi, we follow your robots.txt before crawling, no http attacks. " \
+                     "if you have an enquiry, please email to: abuse-report@terrykyleseoagency.com"
+        if check_robot_text:
+            self.robot_agent = LinkChecker.get_robot_agent(self.root_domain, protocol=self.scheme)
+        else:
+            self.robot_agent = None
+        self.site_crawl_delay = 0.0
+
+        if isinstance(self.robot_agent, Rules):
+            delay_temp = self.robot_agent.delay(self.agent)
+            if delay_temp is not None:
+                self.site_crawl_delay = delay_temp
+
         self.task_control_counter = 1
         self._speed_penalty_count = 0
         self._speed_penalty_threshold = 10
@@ -230,7 +243,13 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
             raise ValueError
         self.task_control_max = concurrent_task
         self.task_control_counter = concurrent_task
-        self._speed_penalty_threshold = int(self._progress_logging_speed/30 * concurrent_task)
+        min_page_per_s = concurrent_task/45
+        self._speed_penalty_threshold = int(self._progress_logging_speed * min_page_per_s)
+        if self.site_crawl_delay > 1/min_page_per_s:
+            ErrorLogger.log_error("SiteChecker._set_task_control_max()",
+                                  ValueError("site has crawl delay greater than mas delay."), self.domain_link)
+            self._status = "Stopped"
+            self.sudden_death()
 
     def get_site_feedback(self) -> SeedSiteFeedback:
         return SeedSiteFeedback(self.orginal_link, page_count=self.get_page_need_look_up())
@@ -343,6 +362,7 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
             self.page_allocated += 1
             if level > self.current_level:
                 self.current_level = level
+            time.sleep(self.site_crawl_delay)
 
     def release_task(self, new_page: int):
         with self.task_control_lock:
@@ -580,13 +600,18 @@ class PageChecker:
     def check_internal_page(checker: SiteChecker, page: OnSiteLink, timeout=10) -> ([], []):
         internal_pages = []
         external_pages = []
-
-        if isinstance(checker.robot_agent, robotparser.RobotFileParser):
-            if not checker.robot_agent.can_fetch(useragent=checker.agent, url=page.link):
-                return [], []
+        #
+        # if isinstance(checker.robot_agent, robotparser.RobotFileParser):
+        #     if not checker.robot_agent.can_fetch(useragent=checker.agent, url=page.link):
+        #         return [], []
         #print("checking internal_page", page)
+
+        if isinstance(checker.robot_agent, Rules):
+            if not checker.robot_agent.allowed(page.link, agent=checker.agent):
+                return [], []
+
         use_lxml_parser = checker.use_lxml_parser()
-        response = LinkChecker.get_page_source(page.link, timeout)
+        response = LinkChecker.get_page_source(page.link, timeout, agent=checker.agent)
         if response is None or response.status_code == ResponseCode.LinkError:
             return [], []
         paras = urlsplit(page.link)

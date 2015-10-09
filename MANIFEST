@@ -6,12 +6,16 @@ DomainFinderSrc/ArchiveOrg/ArchiveExplore.py
 DomainFinderSrc/ArchiveOrg/ProfileExtract.py
 DomainFinderSrc/ArchiveOrg/__init__.py
 DomainFinderSrc/BingCom/__init__.py
+DomainFinderSrc/ComboSites/GoogleMajetic.py
+DomainFinderSrc/ComboSites/__init__.py
 DomainFinderSrc/GoDaddyCom/__init__.py
 DomainFinderSrc/GoDaddyCom/Elements/BulkCheckElements.py
 DomainFinderSrc/GoDaddyCom/Elements/CommonCheckElements.py
 DomainFinderSrc/GoDaddyCom/Elements/__init__.py
 DomainFinderSrc/GoDaddyCom/Elements/Selectors/__init__.py
 DomainFinderSrc/GoogleCom/__init__.py
+DomainFinderSrc/MajesticCom/Catagory.py
+DomainFinderSrc/MajesticCom/DataStruct.py
 DomainFinderSrc/MajesticCom/__init__.py
 DomainFinderSrc/MiniServer/__init__.py
 DomainFinderSrc/MiniServer/Common/DBInterface.py

@@ -7,10 +7,7 @@ from DomainFinderSrc.Scrapers.MatrixFilter import MajesticFilter
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
 from DomainFinderSrc.Utilities import FileIO, Logging
 from DomainFinderSrc.ComboSites.GoogleMajetic import GoogleMajestic, GoogleCom
-
-account = SiteAccount(siteType=AccountType.Majestic, userID="will@bazookasearch.com", password="baltimore9!",
-                      APIkey="1BB1D141D20CAF35D331F086F55C1CEE")
-majestic = MajesticCom(account)
+from .Accounts import majestic, account
 
 
 def is_valid_ISO8859_1_str(original_str: str) -> bool:

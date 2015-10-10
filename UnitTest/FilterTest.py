@@ -4,11 +4,7 @@ from DomainFinderSrc.Scrapers.MatrixFilterControl import *
 from multiprocessing import Event
 import queue
 import csv
-
-
-account = SiteAccount(siteType=AccountType.Majestic, userID="will@bazookasearch.com", password="baltimore9!",
-                      APIkey="1BB1D141D20CAF35D331F086F55C1CEE")
-majestic = MajesticCom(account)
+from .Accounts import majestic, account
 
 
 def get_archive_filter() -> ArchiveOrgFilter:

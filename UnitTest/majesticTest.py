@@ -10,6 +10,7 @@ from DomainFinderSrc.ComboSites.GoogleMajetic import GoogleMajestic, GoogleCom
 from .Accounts import majestic, account
 
 
+
 def is_valid_ISO8859_1_str(original_str: str) -> bool:
     try:
         temp = original_str.encode(encoding='iso-8859-1').decode(encoding='iso-8859-1')

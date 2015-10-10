@@ -4,7 +4,8 @@ from DomainFinderSrc.Scrapers.MatrixFilterControl import *
 from multiprocessing import Event
 import queue
 import csv
-from .Accounts import majestic, account
+from .Accounts import account
+
 
 
 def get_archive_filter() -> ArchiveOrgFilter:

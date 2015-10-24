@@ -11,6 +11,7 @@ class WebRequestCommonHeader:
                     'Content-Type': content_type,
                     'User-Agent': crawler_agent,
                     'Accept-Language': langs,
+                    'From': '',
                     # 'Accept-Encoding': encoding_accept,
                     # 'Accept': '*/*',
                     }
@@ -19,13 +20,17 @@ class WebRequestCommonHeader:
                       'Content-Type': content_type,
                       'User-Agent': crawler_agent,
                       'Accept-Language': langs,
+                      'From': '',
                       # 'Accept-Encoding': encoding_accept,
                       # 'Accept': '*/*',
                      }
 
     @staticmethod
-    def get_html_header(user_agent='ia_archiver'):
-        return WebRequestCommonHeader.html_headers.update({'User-Agent': user_agent})
+    def get_html_header(user_agent='ia_archiver', from_src=""):
+        default_header = WebRequestCommonHeader.html_headers
+        if len(user_agent) > 0 or len(from_src) > 0:
+            default_header.update({'User-Agent': user_agent, 'From': from_src})
+        return default_header
 
     @staticmethod
     def get_common_header(user_agent='ia_archiver'):

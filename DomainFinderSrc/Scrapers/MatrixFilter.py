@@ -303,7 +303,7 @@ class MajesticFilter(FilterInterface):
         brand_name_backlinks_count = 0
         anchor_list, total, deleted, nofollow \
             = majestic.get_anchor_text_info(domain=domain, max_count=self._majestic_result_anchor_limit,
-                                            is_dev=DomainFinderSrc.IS_DEBUG)
+                                            is_dev=DomainFinderSrc.IS_DEBUG, fresh_data=True)
         if len(anchor_list) <= min_anchor_variation_limit:
             raise MajesticSpamException("number of anchor variation is less than 2.")
         # elif (deleted + nofollow)/total > no_follow_limit:
@@ -311,7 +311,7 @@ class MajesticFilter(FilterInterface):
             raise MajesticSpamException("nofollow backlinks are more than 50%.")
         elif len(self._spam_anchor) > 0:
             count = 0
-            for anchor, total_links, deleted_links, no_follow_links in anchor_list:
+            for anchor, ref_domains, total_links, deleted_links, no_follow_links in anchor_list:
                 if domain in anchor:
                     if count < domain_contain_limit:
                         is_in_anchor = True
@@ -345,7 +345,7 @@ class MajesticFilter(FilterInterface):
         max_bad_country_count = 5
         max_backlinks_for_single_bad_country = 30
         ref_domains = majestic.get_ref_domains(domain, max_count=self._majestic_result_ref_domain_limit,
-                                               is_dev=DomainFinderSrc.IS_DEBUG)
+                                               is_dev=DomainFinderSrc.IS_DEBUG, fresh_data=True)
         total_record = len(ref_domains)
         for ref_domain in ref_domains:
             if isinstance(ref_domain, MajesticRefDomainStruct):

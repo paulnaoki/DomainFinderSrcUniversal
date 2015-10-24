@@ -30,6 +30,7 @@ class ServerCommand:
 
 class ServerState:
     State_Active = "ACTIVE"
+    State_Busy = "BUSY"
     State_Idle = "IDLE"
     State_Init = "INIT"
 

@@ -527,11 +527,12 @@ class LinkChecker:
             return return_obj
 
     @staticmethod
-    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2, agent=WebRequestCommonHeader.crawler_agent) -> Response:
+    def get_page_source(link: str, timeout: int=5, retries=0, redirect=2, agent=WebRequestCommonHeader.crawler_agent, from_src="") -> Response:
         s = LinkChecker.get_common_request_session(retries=retries, redirect=redirect)
         return_obj = None
         try:
-            return_obj = s.get(link, headers=WebRequestCommonHeader.get_html_header(user_agent=agent), timeout=timeout)
+            new_header = WebRequestCommonHeader.get_html_header(user_agent=agent, from_src=from_src)
+            return_obj = s.get(link, headers=new_header, timeout=timeout)
             #if isinstance(content, Response):
                 # if raw_data:
                 #     content.text

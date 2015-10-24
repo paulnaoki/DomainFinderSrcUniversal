@@ -4,7 +4,7 @@ import requests
 from multiprocessing.pool import ThreadPool
 from DomainFinderSrc.Utilities.Proxy import ProxyStruct
 import time
-from DomainFinderSrc.Scrapers.SeekSiteGenerator import *
+from DomainFinderSrc.Scrapers.SeedSiteGenSearchEngineInterface import *
 import bs4
 from DomainFinderSrc.Scrapers.WebRequestCommonHeader import WebRequestCommonHeader
 from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker

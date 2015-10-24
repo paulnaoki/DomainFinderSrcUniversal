@@ -7,8 +7,28 @@ from DomainFinderSrc.Scrapers.MatrixFilter import MajesticFilter
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
 from DomainFinderSrc.Utilities import FileIO, Logging
 from DomainFinderSrc.ComboSites.GoogleMajetic import GoogleMajestic, GoogleCom
-from .Accounts import majestic, account
+from DomainFinderSrc.MajesticCom.Category import *
+from UnitTest.Accounts import majestic, account
+from DomainFinderSrc.MiniServer.DatabaseServer.CategoryDB import CategoryDBManager
+from DomainFinderSrc.MiniServer.DatabaseServer.CategorySiteDB import CategorySeedSiteDB, CategorySiteDBManager
+from DomainFinderSrc.Utilities.Serializable import Serializable
+from DomainFinderSrc.MiniServer.Common.DBInterface import *
 
+
+def parse_majestic_topic(topics: str) -> [SubCategory]:
+    splited_topics = topics.split(";")
+    catagories = []
+    for item in splited_topics:
+        if len(item) == 0:
+            continue
+        topic, trust_flow = item.split(":")
+        if len(topic) == 0 or len(trust_flow) == 0:
+            continue
+        else:
+            parsed_catagory = CategoryManager.decode_sub_category(topic)
+            catagories.append(parsed_catagory)
+            print(parsed_catagory)
+    return catagories
 
 
 def is_valid_ISO8859_1_str(original_str: str) -> bool:
@@ -31,6 +51,7 @@ def backlink_callback(backlink: MajesticBacklinkDataStruct):
     logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3.csv"
     print(backlink)
     Logging.CsvLogger.log_to_file_path(logging_path, [backlink.to_tuple(), ])
+
 
 class MajesticTest(TestCase):
 
@@ -165,7 +186,7 @@ class MajesticTest(TestCase):
         niche = "Games/Gambling"
         # niche = "Business/Financial Services"
         sites = GoogleCom.get_sites(keyword="gambling", index=0)
-        backlinks = GoogleMajestic.get_sites_by_seed_sites(majestic, sites, topic=niche, iteration=0, count_per_domain=max_count)
+        backlinks = GoogleMajestic.get_sites_by_seed_sites(majestic, sites, catagories=niche, iteration=0, count_per_domain=max_count)
         for item in backlinks:
             if isinstance(item, MajesticBacklinkDataStruct):
                 print(item)
@@ -182,9 +203,148 @@ class MajesticTest(TestCase):
         # niche = "Business/Financial Services"
         niche = ""
         #sites = GoogleCom.get_sites(keyword="gambling", index=0)
-        backlinks = GoogleMajestic.get_sites_by_seed_sites(majestic, sites, topic=niche, iteration=0,
+        backlinks = GoogleMajestic.get_sites_by_seed_sites(majestic, sites, catagories=niche, iteration=0,
                                                            count_per_domain=max_count, callback=backlink_callback)
         # for item in backlinks:
         #     if isinstance(item, MajesticBacklinkDataStruct):
         #         print(item)
         #         Logging.CsvLogger.log_to_file_path(logging_path, [item.to_tuple(), ])
+
+    def testCatagory(self):
+        catagories = ["","Arts", "Arts/", "arts", "Arts/Movies", "Arts/Movie"]
+        for item in catagories:
+            try:
+                print(CategoryManager.decode_sub_category(item))
+            except Exception as ex:
+                print(ex)
+
+    def testCatagory2(self):
+        import csv
+        path = "/Users/superCat/Desktop/PycharmProjectPortable/test/17-09-2015-Good-Results.csv"
+        counter = 0
+        with open(path, mode='r', newline='') as csv_file:
+            rd = csv.reader(csv_file, delimiter=',')
+            for row in rd:
+                if counter > 0:
+                    parse_majestic_topic(row[10])
+
+                counter += 1
+                print("current loc:", counter)
+
+    def testCategory3(self):
+        save_path = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
+        manager = CategoryManager()
+        db_manager = CategoryDBManager(save_path)
+        for main_category in MainCategory.get_all_category():
+            sub_categories = [SubCategory(main_category, item) for item in manager.get_sub_categories(main_category)]
+            for item in sub_categories:
+                db_manager.get_sub_category(item)
+        db_manager.save()
+
+        for item in db_manager.categories:
+            if isinstance(item, Serializable):
+                print(item.get_serializable(False))
+
+    def testCatagory4(self):
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
+        db = CategorySeedSiteDB(seed_db_addr)
+        basic_manager = CategoryManager()
+        category_manager = CategoryDBManager(category_db_addr)
+        seed_manager = CategorySiteDBManager(db)
+        import csv
+        path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling.csv"
+        counter = 0
+        with open(path, mode='r', newline='') as csv_file:
+            rd = csv.reader(csv_file, delimiter=',')
+            for row in rd:
+                if len(row) == 6:
+                    try:
+                        domain, backlink, tf, cf, topic, topical_tf = row
+                        if len(topic) > 0:
+                            decoded_topic = basic_manager.decode_sub_category(topic, False)
+                            data = MajesticBacklinkDataStruct(ref_domain=domain, src_cf=int(cf),
+                                                              src_tf=int(tf), src_topic=str(decoded_topic), src_topical_tf=int(topical_tf))
+                            seed_manager.append_to_buff(data=data, category=str(decoded_topic))
+                    except Exception as ex:
+                            print(ex)
+                    finally:
+                        counter += 1
+                        print("current loc:", counter, "data:", row)
+        seed_manager.close()
+
+    def testGetSeedsFromBacklinks(self):
+        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed.csv"
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
+        db = CategorySeedSiteDB(seed_db_addr)
+        basic_manager = CategoryManager()
+        category_manager = CategoryDBManager(category_db_addr)
+        seed_manager = CategorySiteDBManager(db)
+        counter = 0
+
+        def backlink_callback_inner(backlink: MajesticBacklinkDataStruct):
+            if len(backlink.src_topic) > 0:
+                decoded_topic = basic_manager.decode_sub_category(backlink.src_topic, False)
+                # print(backlink)
+                Logging.CsvLogger.log_to_file_path(logging_path, [backlink.to_tuple(), ])
+                seed_manager.append_to_buff(data=backlink, category=str(decoded_topic))
+
+        max_count = 2000
+        total_count = 0
+        niches = ["Home/Gardening",]
+        forbidden_list = ["bbc.co.uk", "wikipedia.org", "youtube.com", ".edu", "amazon.co.uk", "facebook.com"]
+        for niche in niches:
+            decoded_topic = basic_manager.decode_sub_category(niche, True)
+            print(decoded_topic)
+        minimum_tf = 30
+        # sites = GoogleCom.get_sites(keyword="Marketing and Advertising", index=0, filter_list=forbidden_list)[10:]
+        sites = [x.ref_domain for x in db.get_from_table("Home/Gardening", 100, 200, {"TF": minimum_tf})]
+        GoogleMajestic.get_sites_by_seed_sites(majestic, sites, catagories=niches, iteration=1,
+                                                           count_per_domain=max_count, callback=backlink_callback_inner,
+                                                           max_count=1000, tf=minimum_tf)
+        seed_manager.close()
+        # total_count += len(backlinks)
+        # print("job finished, total backlinks:", total_count)
+
+    def testPrintSeedDB(self):
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        db = CategorySeedSiteDB(seed_db_addr)
+        seed_manager = CategorySiteDBManager(db)
+        categories = db.get_sub_category_tables_name()
+        total_count = 0
+        target_niche = "Home/"
+        for item in categories:
+            if target_niche in item or len(target_niche) == 0:
+                count = db.get_total(item)
+                total_count += count
+                print(item, "  ", count)
+        print("total:", total_count)
+
+    def testSeedExport(self):
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/sync/SeedSitesList"
+        seed_db = SeedSiteDB("24/10/2015 Home", db_addr=seed_db_addr)
+
+        categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        db = CategorySeedSiteDB(categoy_db_addr)
+        seed_manager = CategorySiteDBManager(db)
+        categories = db.get_sub_category_tables_name()
+        target_ca = [x for x in categories if "Home" in x and "Home/Gardening" not in x]
+        sites = []
+        seeds_needed = 20000
+        percentage = 0.235
+        for ca in target_ca:
+            sites.clear()
+            count = db.get_total(ca)
+            if percentage == 1 and count > seeds_needed:
+                count = seeds_needed
+            count = int(percentage * count)
+            if count > 0:
+                temp = db.get_from_table(ca, 0, count)
+                for item in temp:
+                    if isinstance(item, MajesticBacklinkDataStruct):
+                        sites.append((item.ref_domain, 0))
+                seed_db.add_sites(sites, skip_check=True)
+
+
+

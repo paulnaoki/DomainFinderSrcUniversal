@@ -6,7 +6,7 @@ from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 from multiprocessing.pool import ThreadPool
 from DomainFinderSrc.Utilities.Proxy import ProxyStruct
 import time
-from DomainFinderSrc.Scrapers.SeekSiteGenerator import *
+from DomainFinderSrc.Scrapers.SeedSiteGenSearchEngineInterface import *
 
 
 class GoogleConst:
@@ -119,17 +119,26 @@ class GoogleCom(SeedSiteGeneratorInterface):
 
     @staticmethod
     def get_sites(keyword: str, page: int=1, index: int=0, length: int=100,
-                  history=SeedSiteSettings.TIME_NOW, blog=False) -> []:
+                  history=SeedSiteSettings.TIME_NOW, blog=False, filter_list=[]) -> []:
         if blog:
             domains = GoogleCom.get_blogs(keyword, page, return_domain_home_only=False, timeout=30)
         else:
             domains = GoogleCom.get_search_results(keyword, page, return_domain_home_only=False, timeout=30)
+        new_list = []
+        if domains is not None:
+            if len(filter_list) > 0:
+                for domain in domains:
+                    if not any(x in domain for x in filter_list):
+                        new_list.append(domain)
+            else:
+                new_list = domains
+
         end = index + length
-        data_len = len(domains)
+        data_len = len(new_list)
         if domains is not None and index < data_len:
             if data_len >= end:
-                return domains[index:end]
+                return new_list[index:end]
             else:
-                return domains[index:]
+                return new_list[index:]
         else:
             return []

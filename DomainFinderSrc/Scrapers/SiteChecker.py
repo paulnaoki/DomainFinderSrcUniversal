@@ -153,17 +153,18 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self.external_link_check_lock = threading.RLock()
         self._finihsed = False
         self.task_control_max = 1
-        self.agent = "LightNoHarmBot -- hi, we follow your robots.txt before crawling, no http attacks. " \
-                     "if you have an enquiry, please email to: abuse-report@terrykyleseoagency.com"
+        self.agent = "VegeBot (we follow your robots.txt settings before crawling, you can slow down the bot by change the Crawl-Delay parameter in the settings." \
+                     "if you have an enquiry, please email to: abuse-report@terrykyleseoagency.com)"
+        self.agent_from = "abuse-report@terrykyleseoagency.com"
         if check_robot_text:
             self.robot_agent = LinkChecker.get_robot_agent(self.root_domain, protocol=self.scheme)
         else:
             self.robot_agent = None
-        self.site_crawl_delay = 0.0
+        self.site_crawl_delay = 1.0
 
         if isinstance(self.robot_agent, Rules):
             delay_temp = self.robot_agent.delay(self.agent)
-            if delay_temp is not None:
+            if delay_temp is not None and delay_temp != self.site_crawl_delay:
                 self.site_crawl_delay = delay_temp
 
         self.task_control_counter = 1
@@ -611,7 +612,7 @@ class PageChecker:
                 return [], []
 
         use_lxml_parser = checker.use_lxml_parser()
-        response = LinkChecker.get_page_source(page.link, timeout, agent=checker.agent)
+        response = LinkChecker.get_page_source(page.link, timeout, agent=checker.agent, from_src=checker.agent_from)
         if response is None or response.status_code == ResponseCode.LinkError:
             return [], []
         paras = urlsplit(page.link)

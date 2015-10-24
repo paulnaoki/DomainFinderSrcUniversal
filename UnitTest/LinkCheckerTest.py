@@ -81,5 +81,10 @@ class LinkCheckerTest(TestCase):
             print("new path:", short_path)
             print("extension:", ext)
 
+    def testRequest(self):
+        url = "http://127.0.0.1:8000/"
+        agent = "VegeBot"
+        source = LinkChecker.get_page_source(url, agent=agent, from_src="abuse-report@terrykyleseoagency.com")
+        print(source)
 
 

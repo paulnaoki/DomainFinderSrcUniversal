@@ -4,8 +4,8 @@ from DomainFinderSrc.Scrapers.MatrixFilterControl import *
 from multiprocessing import Event
 import queue
 import csv
-from .Accounts import account
-
+from UnitTest.Accounts import account
+from DomainFinderSrc.MiniServer.Common.DBInterface import FilteredResultDB
 
 
 def get_archive_filter() -> ArchiveOrgFilter:
@@ -34,6 +34,7 @@ class FilterTest(TestCase):
         filter = get_majestic_filter()
         param = {"Account": account}
         links = FileIO.FileHandler.read_lines_from_file("/Users/superCat/Desktop/PycharmProjectPortable/test/spam_test1.txt")
+
         for link in links:
             site = FilteredDomainData(domain=link)
             filter.process_data(data=site, **param)
@@ -54,4 +55,22 @@ class FilterTest(TestCase):
                 if archive_data is not None:
                     majestic_data = majestic_filter.process_data(data=site, **param)
                     print(majestic_data)
+                count += 1
+
+    def testRamdom(self):
+        print(1 != 2)
+
+    def testReadFromDb(self):
+        db_path = "/Users/superCat/Desktop/PycharmProjectPortable/test/sync/FilteredSitesList"
+        good_db = "/Users/superCat/Desktop/PycharmProjectPortable/test/sync/FilteredSitesList_Good"
+        bad_db = "/Users/superCat/Desktop/PycharmProjectPortable/test/sync/FilteredSitesList_Bad"
+        table = "01/10/2015 Gambling"
+        db = FilteredResultDB(table=table, offset=0, db_addr=db_path)
+        total_record = 10000
+        patch = 10
+        count = 0
+        while count < total_record:
+            sites = db.get_next_patch(patch, rollover=False)
+            for item in sites:
+                print("item number:", count, " ", item)
                 count += 1

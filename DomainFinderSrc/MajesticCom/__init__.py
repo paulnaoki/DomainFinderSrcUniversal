@@ -19,13 +19,13 @@ class MajesticCom:
         self.account = account
 
     @staticmethod
-    def _get_json_data(parameters: dict, is_dev=True):
+    def _get_json_data(parameters: dict, is_dev=True, timeout=30):
         para_encoded = urllib.parse.urlencode(parameters)
         if is_dev:
             request_url = MajesticConst.Deve_endpoint + para_encoded
         else:
             request_url = MajesticConst.Live_endpoint + para_encoded
-        return requests.get(request_url).json()
+        return requests.get(request_url, timeout=timeout).json()
 
     def get_backlinks(self, domain: str, max_count=10, topic="", is_dev=True, fresh_data=False) -> []:
         """
@@ -108,10 +108,10 @@ class MajesticCom:
             # "datasource": "fresh",
             "app_api_key": self.account.APIKey,
             "cmd": MajesticConst.cmd_get_ref_domains,
-            "OrderBy1": 1,  # AlexaRank (lowest number means higher traffic)
-            "OrderDir1": 0,  # ascending order for AlexaRank
-            "OrderBy2": 2,  # number of referring root domains linking to a root domain.
-            "OrderDir2": 1,  # descending order for referring domains
+            "OrderBy2": 1,  # AlexaRank (lowest number means higher traffic)
+            "OrderDir2": 0,  # ascending order for AlexaRank
+            "OrderBy1": 11,  # Number of matched links.
+            "OrderDir1": 1,  # descending order for backlinks.
             "AnalysisDepth": 100000,  # (default) - no filter on anchor text
             "Count": max_count,
             "item0": domain,
@@ -124,7 +124,7 @@ class MajesticCom:
             table = json_data["DataTables"]["Results"]["Data"]
             for item in table:
                 ref_domains.append(MajesticRefDomainStruct(domain=item["Domain"], tf=item["TrustFlow"],
-                                                           cf=item["CitationFlow"], backlinks=item["ExtBackLinks"],
+                                                           cf=item["CitationFlow"], backlinks=int(item["BackLinks_"+domain.lower()]),
                                                            country=item["CountryCode"], ref_domains=item["RefDomains"],
                                                            ip=item["IP"], alexa_rank=item["AlexaRank"]))
             return ref_domains
@@ -155,21 +155,23 @@ class MajesticCom:
         json_data = MajesticCom._get_json_data(parameters, is_dev)
         if json_data["Code"] == "OK":
             anchorTextRows = []
-            anchorTexts = []
+            #anchorTexts = []
             total_links = 0
             deleted_links = 0
             no_follow_links = 0
             table = json_data["DataTables"]["AnchorText"]["Data"]
             for item in table:
-                temp_anchor = str(item["AnchorText"]).lower()
-                if temp_anchor not in anchorTexts:
-                    anchorTexts.append(temp_anchor)
+                temp_anchor = str(item["AnchorText"]).lower().strip()
+                if len(temp_anchor) == 0:
+                    continue
+                #if temp_anchor not in anchorTexts:
+                    #anchorTexts.append(temp_anchor)
                 total_links += item["TotalLinks"]
                 deleted_links += item["DeletedLinks"]
                 no_follow_links += item["NoFollowLinks"]
-                anchorTextRows.append((temp_anchor, item["TotalLinks"], item["DeletedLinks"], item["NoFollowLinks"]))
-            anchorTexts = [x for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
-            return anchorTexts, total_links, deleted_links, no_follow_links
+                anchorTextRows.append((temp_anchor, item["RefDomains"], item["TotalLinks"], item["DeletedLinks"], item["NoFollowLinks"]))
+            #anchorTexts = [x for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
+            return anchorTextRows, total_links, deleted_links, no_follow_links
         else:
             raise ValueError("get_anchor_text(): data request reuturn wrong.",)
 

@@ -13,6 +13,7 @@ class DBType:
     Type_External = "External"
     Type_Filtered_Result = "FilteredResult"
     Type_Filtered_Result_Bad = "FilteredResult_Bad"
+    Type_Marketplace = "Marketplace"
     Type_All = "All"
 
 
@@ -20,7 +21,8 @@ class DBInterface:
     """
     DB must have the field DOMAIN
     """
-    def __init__(self, table: str, memTest :str, offset=0, databaseType: str=SiteSource.Seed,  db_addr: str=None,
+    def __init__(self, table: str, creation_query :str, insert_query: str="",
+                 offset=0, databaseType: str=SiteSource.Seed,  db_addr: str=None,
                  db_filter: DBFilterInterface=None):
         if databaseType is None:
             raise ValueError("database type cannot be None")
@@ -30,13 +32,14 @@ class DBInterface:
             self.db_addr = db_addr
         self.tab = table
         self.db_type = databaseType
-        if (self.db_addr is None or len(self.db_addr) == 0) and len(memTest) > 0:
+        if (self.db_addr is None or len(self.db_addr) == 0) and len(creation_query) > 0:
             self.db = sqlite3.connect(":memory:")
         else:
             self.db = sqlite3.connect(self.db_addr)
         self.cur = self.db.cursor()
-        self.cur.execute(memTest)
+        self.cur.execute(creation_query)
         self.db.commit()
+        self.insert_query = insert_query
         self.offset = offset
         self.db_filter = db_filter
         self.output_format_tuple = False
@@ -49,8 +52,27 @@ class DBInterface:
     def import_from_file(self, file_path: str):
         pass
 
+    def convert_input(self, obj) -> tuple:
+        return obj
+
+    def convert_output(self, obj):
+        return obj
+
     def add_sites(self, sites, skip_check=False):
-        pass
+        if len(sites) < 1:
+            return
+        if skip_check:
+            need_to_add = sites
+        else:
+            need_to_add = []
+        try:
+            if not skip_check:
+                need_to_add = [self.convert_input(x) for x in sites]
+            self.cur.executemany(self.insert_query.format(self.tab, ), need_to_add)
+            self.db.commit()
+        except Exception as ex:
+            msg = "add_sites() " + self.tab
+            ErrorLogger.log_error("SeedSiteDB", ex, msg)
 
     @staticmethod
     def get_fields_names():
@@ -70,6 +92,20 @@ class DBInterface:
             return True if result[0] == 1 else False
         except sqlite3.OperationalError as ex:
             return True  # so that new data will not add to the db to cause further error
+
+    def convert_query_para(self, **kwargs) -> str:
+        return ""
+
+    def get_next_patch_no_rollover(self, index: int, count: int, **kwargs):
+
+        try:
+            self.cur.execute(u"SELECT * FROM \'{0:s}\'{1:s} ORDER BY rowid LIMIT {2:d} OFFSET {3:d};".
+                             format(self.tab, self.convert_query_para(**kwargs), count, index))
+            results = [self.convert_output(x) for x in self.cur.fetchall()]
+            return results
+
+        except Exception as ex:
+            raise ex
 
     def get_next_patch(self, count: int, rollover=True, **kwargs) ->[]:  # if you need a custom filtered implmentation
         result = []
@@ -112,6 +148,22 @@ class DBInterface:
     def update_sites(self, sites: []):
         pass
 
+    def delete_sites(self, sites: []):
+        if len(sites) < 1:
+            return
+        need_to_delete = []
+        try:
+            for item in sites:
+                if isinstance(item, str):
+                    need_to_delete.append(item)
+                elif hasattr(item, "domain"):
+                    need_to_delete.append(item.domain)
+            self.cur.executemany(u"DELETE FROM \'{0:s}\' WHERE DOMAIN=?;".format(self.tab, ), need_to_delete)
+            self.db.commit()
+        except Exception as ex:
+            msg = "delete_sites() " + self.tab
+            ErrorLogger.log_error(self.db_type, ex, msg)
+
     def close(self):
         self.db.close()
 
@@ -119,7 +171,7 @@ class DBInterface:
 class SeedSiteDB(DBInterface):
     def __init__(self, table: str, offset=0, db_addr: str=None, db_filter=SeedSiteFilter()):
         memTest = "CREATE TABLE IF NOT EXISTS \'%s\'(DOMAIN TEXT, PAGE_C INTEGER, PRIMARY KEY(DOMAIN));" % (table,)
-        DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
+        DBInterface.__init__(self, table=table, creation_query=memTest, db_addr=db_addr, offset=offset,
                              databaseType=SiteSource.Seed, db_filter=db_filter)
         self.db_filter = db_filter
 
@@ -257,10 +309,10 @@ class FilteredResultDB(DBInterface):
                   "FOUND INTEGER,PRICE REAL, REF_DOMAINS INTEGER, DOMAIN_VAR TEXT, BACKLINKS INTEGER, TOPIC TEXT, EXCEPTION TEXT," \
                   "PRIMARY KEY(DOMAIN));" % (table,)
         if not bad_db:
-            DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
+            DBInterface.__init__(self, table=table, creation_query=memTest, db_addr=db_addr, offset=offset,
                                  databaseType=SiteSource.Flitered, db_filter=db_filter)
         else:  # database contains bad results.
-            DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
+            DBInterface.__init__(self, table=table, creation_query=memTest, db_addr=db_addr, offset=offset,
                      databaseType=SiteSource.Filtered_bad, db_filter=db_filter)
         self.db_filter = db_filter
 
@@ -308,7 +360,7 @@ class FilteredResultDB(DBInterface):
 class ExternalSiteDB(DBInterface):
     def __init__(self, table: str, offset=0, db_addr: str=None, db_filter=ExternalSiteDBFilter()):
         memTest = "CREATE TABLE IF NOT EXISTS \'%s\'(DOMAIN TEXT, CODE INTEGER, PRIMARY KEY(DOMAIN));" % (table,)
-        DBInterface.__init__(self, table=table, memTest=memTest, db_addr=db_addr, offset=offset,
+        DBInterface.__init__(self, table=table, creation_query=memTest, db_addr=db_addr, offset=offset,
                              databaseType=SiteSource.AllExternal, db_filter=db_filter)
         self.db_filter = db_filter
 

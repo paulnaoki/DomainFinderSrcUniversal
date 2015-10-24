@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='DomainFinderSrc',
-    version='1.0.4.6',
+    version='1.0.4.8',
     packages=['DomainFinderSrc', 'DomainFinderSrc.xlrd', 'DomainFinderSrc.MozCom',
               'DomainFinderSrc.Scrapers', 'DomainFinderSrc.Scrapers.SiteTempDataSrc',
               'DomainFinderSrc.ArchiveOrg',

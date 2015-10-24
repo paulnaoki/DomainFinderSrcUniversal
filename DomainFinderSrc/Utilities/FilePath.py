@@ -50,6 +50,15 @@ def get_recovery_dir_path(ref: str=""):
     return temp_loc + ref
 
 
+def get_marketplace_db_path(ref: str=""):
+    machine_tpye = MachineInfo.get_machine_type()
+    if machine_tpye == MachineType.Windows:
+        temp_loc = "D:/SQLiteDB/Temp/Marketplace/"
+    else:
+        temp_loc = "/usr/local/DomainFinder/Database/Marketplace/"
+    return temp_loc + ref
+
+
 def get_task_backup_dir(ref: str=""):
     machine_tpye = MachineInfo.get_machine_type()
     if machine_tpye == MachineType.Windows:

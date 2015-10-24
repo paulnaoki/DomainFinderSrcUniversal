@@ -14,7 +14,7 @@ DomainFinderSrc/GoDaddyCom/Elements/CommonCheckElements.py
 DomainFinderSrc/GoDaddyCom/Elements/__init__.py
 DomainFinderSrc/GoDaddyCom/Elements/Selectors/__init__.py
 DomainFinderSrc/GoogleCom/__init__.py
-DomainFinderSrc/MajesticCom/Catagory.py
+DomainFinderSrc/MajesticCom/Category.py
 DomainFinderSrc/MajesticCom/DataStruct.py
 DomainFinderSrc/MajesticCom/__init__.py
 DomainFinderSrc/MiniServer/__init__.py
@@ -47,7 +47,7 @@ DomainFinderSrc/Scrapers/LinkChecker.py
 DomainFinderSrc/Scrapers/MatrixFilter.py
 DomainFinderSrc/Scrapers/MatrixFilterControl.py
 DomainFinderSrc/Scrapers/NonBlockingRequest.py
-DomainFinderSrc/Scrapers/SeekSiteGenerator.py
+DomainFinderSrc/Scrapers/SeedSiteGenSearchEngineInterface.py
 DomainFinderSrc/Scrapers/SiteCheckProcessManager.py
 DomainFinderSrc/Scrapers/SiteChecker.py
 DomainFinderSrc/Scrapers/SiteCheckerManager.py

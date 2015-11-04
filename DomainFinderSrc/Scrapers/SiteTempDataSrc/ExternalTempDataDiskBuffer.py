@@ -31,7 +31,7 @@ class ExternalTempInterface:
 
 class ExternalTempDataDiskBuffer(FileBuffInterface):
 
-    def __init__(self, file_name,  worker: ExternalTempInterface, stop_event: Event, buf_size=200,
+    def __init__(self, file_name,  worker: ExternalTempInterface, stop_event: Event, buf_size=200, output_f=1000,
                  dir_path="",  table_name="temp", convert_input=True, convert_output=True, terminate_callback=None):
         """
 
@@ -60,7 +60,7 @@ class ExternalTempDataDiskBuffer(FileBuffInterface):
         self._put_lock = threading.RLock()
         self._convert_input = convert_input
         self._convert_output = convert_output
-        FileBuffInterface.__init__(self, self._file_name, buf_size, power_save_mode=True,
+        FileBuffInterface.__init__(self, self._file_name, buf_size, output_f=output_f, power_save_mode=True,
                                    terminate_callback=terminate_callback)
         self.set_db_update_interval(10)
 

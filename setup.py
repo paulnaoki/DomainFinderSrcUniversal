@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='DomainFinderSrc',
-    version='1.0.4.8',
+    version='1.0.4.9',
     packages=['DomainFinderSrc', 'DomainFinderSrc.xlrd', 'DomainFinderSrc.MozCom',
               'DomainFinderSrc.Scrapers', 'DomainFinderSrc.Scrapers.SiteTempDataSrc',
               'DomainFinderSrc.ArchiveOrg',
@@ -16,6 +16,7 @@ setup(
               'DomainFinderSrc.Utilities',
               'DomainFinderSrc.BingCom',
               'DomainFinderSrc.ComboSites',
+              'DomainFinderSrc.AmazonServiceCom',
               'pythonwhois'],
 
     #package_dir={"pythonwhois": "pythonwhois"},
@@ -38,6 +39,7 @@ setup(
         'shortuuid',
         'boto3',
         'reppy',
+        # 'uritools',
         ],
         # Dependent packages (distributions)
     # requires=[

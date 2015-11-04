@@ -2,6 +2,11 @@
 setup.py
 DomainFinderSrc/PageNavigator.py
 DomainFinderSrc/__init__.py
+DomainFinderSrc/AmazonServiceCom/Const.py
+DomainFinderSrc/AmazonServiceCom/DataStruct.py
+DomainFinderSrc/AmazonServiceCom/EC2Resource.py
+DomainFinderSrc/AmazonServiceCom/ResCommon.py
+DomainFinderSrc/AmazonServiceCom/__init__.py
 DomainFinderSrc/ArchiveOrg/ArchiveExplore.py
 DomainFinderSrc/ArchiveOrg/ProfileExtract.py
 DomainFinderSrc/ArchiveOrg/__init__.py
@@ -80,6 +85,7 @@ DomainFinderSrc/Utilities/MemoryControlProcess.py
 DomainFinderSrc/Utilities/Proxy.py
 DomainFinderSrc/Utilities/QueueManager.py
 DomainFinderSrc/Utilities/Serializable.py
+DomainFinderSrc/Utilities/StrUtility.py
 DomainFinderSrc/Utilities/ThreadFlag.py
 DomainFinderSrc/Utilities/TimeIt.py
 DomainFinderSrc/Utilities/__init__.py

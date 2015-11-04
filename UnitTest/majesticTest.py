@@ -13,6 +13,7 @@ from DomainFinderSrc.MiniServer.DatabaseServer.CategoryDB import CategoryDBManag
 from DomainFinderSrc.MiniServer.DatabaseServer.CategorySiteDB import CategorySeedSiteDB, CategorySiteDBManager
 from DomainFinderSrc.Utilities.Serializable import Serializable
 from DomainFinderSrc.MiniServer.Common.DBInterface import *
+import re
 
 
 def parse_majestic_topic(topics: str) -> [SubCategory]:
@@ -274,7 +275,8 @@ class MajesticTest(TestCase):
         seed_manager.close()
 
     def testGetSeedsFromBacklinks(self):
-        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed.csv"
+        import random
+        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed2.csv"
         seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
         category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
         db = CategorySeedSiteDB(seed_db_addr)
@@ -290,49 +292,98 @@ class MajesticTest(TestCase):
                 Logging.CsvLogger.log_to_file_path(logging_path, [backlink.to_tuple(), ])
                 seed_manager.append_to_buff(data=backlink, category=str(decoded_topic))
 
-        max_count = 2000
+        max_count = 4000
         total_count = 0
-        niches = ["Home/Gardening",]
-        forbidden_list = ["bbc.co.uk", "wikipedia.org", "youtube.com", ".edu", "amazon.co.uk", "facebook.com"]
+        seed_init_limit = 100
+        seed_depth_limit = 450
+        temp_niches = ["Health/Nutrition", ]
+        niches = []
+
+        for niche in temp_niches:  # make valid niche for seeds
+            if niche.endswith("General"):
+                niches.append(niche.rstrip("General"))
+            else:
+                niches.append(niche)
+
+        forbidden_list = ["bbc.co.uk", "wikipedia.org", "youtube.com", ".edu", "amazon.co.uk", "facebook.com", "google.com"]
         for niche in niches:
             decoded_topic = basic_manager.decode_sub_category(niche, True)
             print(decoded_topic)
         minimum_tf = 30
+        temp_sites = []
+        target_ca = []
+        sites = []
+        parameters = {"TF": minimum_tf}
         # sites = GoogleCom.get_sites(keyword="Marketing and Advertising", index=0, filter_list=forbidden_list)[10:]
-        sites = [x.ref_domain for x in db.get_from_table("Home/Gardening", 100, 200, {"TF": minimum_tf})]
+        categories = db.get_sub_category_tables_name()
+        for niche in niches:
+            target_ca += [x for x in categories if niche in x]
+
+        seed_count = 0
+        load_limit = seed_init_limit*4
+        # for ca in target_ca:
+        #     count = db.get_total(ca, **parameters)
+        #     seed_count += count
+
+        for ca in target_ca:
+            temp_sites += [x.ref_domain for x in db.get_from_table(ca, 0, load_limit, parameters)]
+
+        seed_count = len(temp_sites)
+
+        if seed_count <= seed_init_limit:
+            sites = temp_sites
+        elif seed_init_limit < seed_count <= seed_init_limit * 2:
+            sites = temp_sites[::2]
+        else:
+            while len(sites) < seed_init_limit:
+                site = temp_sites[random.randint(0, seed_count-1)]
+                if site not in sites:
+                    sites.append(site)
+
         GoogleMajestic.get_sites_by_seed_sites(majestic, sites, catagories=niches, iteration=1,
                                                            count_per_domain=max_count, callback=backlink_callback_inner,
-                                                           max_count=1000, tf=minimum_tf)
+                                                           max_count=seed_depth_limit, tf=minimum_tf)
         seed_manager.close()
         # total_count += len(backlinks)
         # print("job finished, total backlinks:", total_count)
 
     def testPrintSeedDB(self):
         seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        log_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SeedLog.csv"
+        enable_log = True
         db = CategorySeedSiteDB(seed_db_addr)
         seed_manager = CategorySiteDBManager(db)
         categories = db.get_sub_category_tables_name()
         total_count = 0
-        target_niche = "Home/"
+        target_niche = ""
+        parameters = {}
+        if enable_log:
+            CsvLogger.log_to_file_path(log_file_path, [("parameters", str(parameters)), ])
+        # parameters = {"TF": 20}
         for item in categories:
             if target_niche in item or len(target_niche) == 0:
-                count = db.get_total(item)
+                count = db.get_total(item, **parameters)
                 total_count += count
                 print(item, "  ", count)
+                if enable_log:
+                    CsvLogger.log_to_file_path(log_file_path, [(item, str(count)), ])
         print("total:", total_count)
+        if enable_log:
+            CsvLogger.log_to_file_path(log_file_path, [("total", str(total_count)), ])
 
-    def testSeedExport(self):
+    def testeedExport(self):
         seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/sync/SeedSitesList"
-        seed_db = SeedSiteDB("24/10/2015 Home", db_addr=seed_db_addr)
+        seed_db = SeedSiteDB("26/10/2015 Marketing CF20", db_addr=seed_db_addr)
 
         categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
         db = CategorySeedSiteDB(categoy_db_addr)
         seed_manager = CategorySiteDBManager(db)
         categories = db.get_sub_category_tables_name()
-        target_ca = [x for x in categories if "Home" in x and "Home/Gardening" not in x]
+        target_ca = [x for x in categories if "Business/Marketing and Advertising" in x]
         sites = []
         seeds_needed = 20000
-        percentage = 0.235
+        percentage = 1
+        parameters = {"CF": 20, }
         for ca in target_ca:
             sites.clear()
             count = db.get_total(ca)
@@ -340,11 +391,12 @@ class MajesticTest(TestCase):
                 count = seeds_needed
             count = int(percentage * count)
             if count > 0:
-                temp = db.get_from_table(ca, 0, count)
+                temp = db.get_from_table(ca, 0, count, filter_dict=parameters)
                 for item in temp:
                     if isinstance(item, MajesticBacklinkDataStruct):
                         sites.append((item.ref_domain, 0))
                 seed_db.add_sites(sites, skip_check=True)
+        seed_db.close()
 
 
 

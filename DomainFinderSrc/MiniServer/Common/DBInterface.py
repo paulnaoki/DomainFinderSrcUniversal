@@ -6,6 +6,7 @@ from DomainFinderSrc.UserAccountSettings.UserAccountDB import DBFilterInterface,
     ExternalSiteDBFilter
 from DomainFinderSrc.Utilities.FilePath import SiteSource
 from DomainFinderSrc.Utilities.Logging import *
+from DomainFinderSrc.Utilities.StrUtility import StrUtility
 
 
 class DBType:
@@ -31,6 +32,7 @@ class DBInterface:
         else:
             self.db_addr = db_addr
         self.tab = table
+        self.encoded_tab = StrUtility.make_valid_table_name(table)
         self.db_type = databaseType
         if (self.db_addr is None or len(self.db_addr) == 0) and len(creation_query) > 0:
             self.db = sqlite3.connect(":memory:")
@@ -46,7 +48,7 @@ class DBInterface:
         self.get_lock = threading.RLock()
 
     def drop_table(self):
-        self.cur.execute("DROP TABLE \'%s\';" % (self.tab,))
+        self.cur.execute("DROP TABLE \'%s\';" % (self.encoded_tab,))
         self.db.commit()
 
     def import_from_file(self, file_path: str):
@@ -68,7 +70,7 @@ class DBInterface:
         try:
             if not skip_check:
                 need_to_add = [self.convert_input(x) for x in sites]
-            self.cur.executemany(self.insert_query.format(self.tab, ), need_to_add)
+            self.cur.executemany(self.insert_query.format(self.encoded_tab, ), need_to_add)
             self.db.commit()
         except Exception as ex:
             msg = "add_sites() " + self.tab
@@ -79,14 +81,14 @@ class DBInterface:
         return "DOMAIN",
 
     def get_all_sites(self) ->[]:
-        self.cur.execute("SELECT DOMAIN FROM \'%s\';" % (self.tab,))
+        self.cur.execute("SELECT DOMAIN FROM \'%s\';" % (self.encoded_tab,))
         self.db.commit()
         return self.cur.fetchall()
 
     def is_domain_in_db(self, domain: str):
         try:
             cur = self.cur.execute("SELECT EXISTS(SELECT 1 FROM \'{0:s}\' "
-                                   "WHERE DOMAIN=\'{1:s}\' LIMIT 1);".format(self.tab, domain,))
+                                   "WHERE DOMAIN=\'{1:s}\' LIMIT 1);".format(self.encoded_tab, domain,))
             #cur = tempdb.cur.execute("SELECT * FROM TEMP WHERE LINK=\'{0:s}\' LIMIT 1;".format(link,))
             result = cur.fetchone()
             return True if result[0] == 1 else False
@@ -100,7 +102,7 @@ class DBInterface:
 
         try:
             self.cur.execute(u"SELECT * FROM \'{0:s}\'{1:s} ORDER BY rowid LIMIT {2:d} OFFSET {3:d};".
-                             format(self.tab, self.convert_query_para(**kwargs), count, index))
+                             format(self.encoded_tab, self.convert_query_para(**kwargs), count, index))
             results = [self.convert_output(x) for x in self.cur.fetchall()]
             return results
 
@@ -117,7 +119,7 @@ class DBInterface:
             limit = total - self.offset
         else:
             limit = count
-        self.cur.execute("SELECT * FROM \'%s\' ORDER BY rowid LIMIT %d OFFSET %d" % (self.tab, limit, self.offset))
+        self.cur.execute("SELECT * FROM \'%s\' ORDER BY rowid LIMIT %d OFFSET %d" % (self.encoded_tab, limit, self.offset))
         self.db.commit()
         result += self.cur.fetchall()
         self.offset += limit
@@ -127,7 +129,7 @@ class DBInterface:
                 new_limit = total
             else:
                 new_limit = count - limit
-            self.cur.execute("SELECT * FROM \'%s\' ORDER BY rowid LIMIT %d OFFSET %d" % (self.tab, new_limit, 0))
+            self.cur.execute("SELECT * FROM \'%s\' ORDER BY rowid LIMIT %d OFFSET %d" % (self.encoded_tab, new_limit, 0))
             self.db.commit()
             result += self.cur.fetchall()
             self.offset = new_limit
@@ -140,7 +142,7 @@ class DBInterface:
         if use_filter and self.db_filter is not None and self.db_filter.need_filtering():
             return self.site_count_with_filter()
         else:
-            self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\';".format(self.tab,))
+            self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\';".format(self.encoded_tab,))
             self.db.commit()
             result = self.cur.fetchone()
             return result[0]
@@ -158,7 +160,7 @@ class DBInterface:
                     need_to_delete.append(item)
                 elif hasattr(item, "domain"):
                     need_to_delete.append(item.domain)
-            self.cur.executemany(u"DELETE FROM \'{0:s}\' WHERE DOMAIN=?;".format(self.tab, ), need_to_delete)
+            self.cur.executemany(u"DELETE FROM \'{0:s}\' WHERE DOMAIN=?;".format(self.encoded_tab, ), need_to_delete)
             self.db.commit()
         except Exception as ex:
             msg = "delete_sites() " + self.tab
@@ -202,9 +204,10 @@ class SeedSiteDB(DBInterface):
                         # if result[0] == 0:
                         need_to_add.append((item.domain, item.page_count))
 
-            self.cur.executemany(u"INSERT OR IGNORE INTO \'{0:s}\' (DOMAIN, PAGE_C) VALUES (?, ?);".format(self.tab, ), need_to_add)
+            self.cur.executemany(u"INSERT OR IGNORE INTO \'{0:s}\' (DOMAIN, PAGE_C) VALUES (?, ?);".format(self.encoded_tab, ), need_to_add)
             self.db.commit()
         except Exception as ex:
+            print(ex)
             msg = "add_sites() " + self.tab
             ErrorLogger.log_error("SeedSiteDB", ex, msg)
         return need_to_add
@@ -218,7 +221,7 @@ class SeedSiteDB(DBInterface):
             raise ValueError("other format is not supported.")
 
     def site_count_with_filter(self):
-        self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\' WHERE PAGE_C>={1:d};".format(self.tab, self.db_filter.min_page))
+        self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\' WHERE PAGE_C>={1:d};".format(self.encoded_tab, self.db_filter.min_page))
         result = self.cur.fetchone()
         return result[0]
 
@@ -229,7 +232,7 @@ class SeedSiteDB(DBInterface):
                 need_to_update.append((site.page_count, site.domain))
                 #if isinstance(site, SeedSiteFeedback):
             try:
-                self.cur.executemany(u"UPDATE \'{0:s}\' SET PAGE_C=? WHERE DOMAIN=?;".format(self.tab), need_to_update)
+                self.cur.executemany(u"UPDATE \'{0:s}\' SET PAGE_C=? WHERE DOMAIN=?;".format(self.encoded_tab), need_to_update)
                 self.db.commit()
             except Exception as ex:
                 ErrorLogger.log_error("SeedSiteDB", ex, "update_sites")
@@ -251,7 +254,7 @@ class SeedSiteDB(DBInterface):
                 total = self.site_count(False)
                 if total > 0:
                     q = u"SELECT DOMAIN, rowid FROM \'{0:s}\' WHERE PAGE_C >={1:d} " \
-                        u"ORDER BY rowid LIMIT {2:d} OFFSET {3:d};".format(self.tab, page_count, count, self.offset)
+                        u"ORDER BY rowid LIMIT {2:d} OFFSET {3:d};".format(self.encoded_tab, page_count, count, self.offset)
                     #print(q)
                     cur = self.cur.execute(q)
                     temp = cur.fetchall()
@@ -282,7 +285,7 @@ class SeedSiteDB(DBInterface):
                         break
                     cur = self.cur.execute(
                         u"SELECT DOMAIN, PAGE_C FROM \'{0:s}\' ORDER BY rowid LIMIT {1:d} OFFSET {2:d};"
-                        .format(self.tab, 1, self.offset))
+                        .format(self.encoded_tab, 1, self.offset))
                     temp = cur.fetchone()
                     domain = ""
                     page = 0
@@ -321,7 +324,7 @@ class FilteredResultDB(DBInterface):
         return "DOMAIN", "TF", "CF", "DA", "ARCHIVE", "FOUND", "PRICE", "REF DOMAINS", "DOMAIN VAR", "BACKLINKS", "TOPIC", "EXCEPTION"
 
     def get_all_sites(self) ->[]:
-        self.cur.execute("SELECT * FROM \'%s\';" % (self.tab,))
+        self.cur.execute("SELECT * FROM \'%s\';" % (self.encoded_tab,))
         self.db.commit()
         return self.cur.fetchall()
 
@@ -341,7 +344,7 @@ class FilteredResultDB(DBInterface):
         try:
             self.cur.executemany(u"INSERT OR REPLACE INTO \'{0:s}\' (DOMAIN, TF, CF, DA, ARCHIVE, FOUND, PRICE, "
                                  u"REF_DOMAINS, DOMAIN_VAR, BACKLINKS, TOPIC, EXCEPTION) VALUES"
-                                 u" (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);".format(self.tab,), need_to_add)
+                                 u" (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);".format(self.encoded_tab,), need_to_add)
             self.db.commit()
         except Exception as ex:
             ErrorLogger.log_error("FilteredResultDB", ex, "add_sites()")
@@ -351,7 +354,7 @@ class FilteredResultDB(DBInterface):
     def site_count_with_filter(self):
         self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\' WHERE TF >={1:d}  AND CF >={2:d} AND DA >={3:d} "
                          u"AND ARCHIVE >={4:d} AND REF_DOMAINS >={5:d} AND BACKLINKS >= {6:d};"
-                         .format(self.tab, self.db_filter.tf, self.db_filter.cf, self.db_filter.da, self.db_filter.arc,
+                         .format(self.encoded_tab, self.db_filter.tf, self.db_filter.cf, self.db_filter.da, self.db_filter.arc,
                                  self.db_filter.ref_domains, self.db_filter.backlinks))
         result = self.cur.fetchone()
         return result[0]
@@ -388,7 +391,7 @@ class ExternalSiteDB(DBInterface):
             need_to_add = sites
 
         try:
-            self.cur.executemany(u"INSERT OR IGNORE INTO \'{0:s}\' (DOMAIN, CODE) VALUES (?, ?);".format(self.tab,), need_to_add)
+            self.cur.executemany(u"INSERT OR IGNORE INTO \'{0:s}\' (DOMAIN, CODE) VALUES (?, ?);".format(self.encoded_tab,), need_to_add)
             self.db.commit()
         except Exception as ex:
             ErrorLogger.log_error("ExternalSiteDB", ex, "add_sites()")
@@ -400,7 +403,7 @@ class ExternalSiteDB(DBInterface):
             for site in sites:
                 need_to_update.append((site.code, site.domain))
                 #if isinstance(site, ScrapeDomainData):
-            self.cur.executemany(u"UPDATE \'{0:s}\' SET CODE=? WHERE DOMAIN=?;".format(self.tab,), need_to_update)
+            self.cur.executemany(u"UPDATE \'{0:s}\' SET CODE=? WHERE DOMAIN=?;".format(self.encoded_tab,), need_to_update)
             self.db.commit()
 
     def get_next_patch(self, count: int, rollover=True, equal=True, **kwargs):
@@ -426,7 +429,7 @@ class ExternalSiteDB(DBInterface):
                 cur = self.cur.execute(
                     u"SELECT DOMAIN, CODE, rowid FROM \'{0:s}\' WHERE CODE{1:s}{2:d} "
                     u"ORDER BY rowid LIMIT {3:d} OFFSET {4:d};"
-                    .format(self.tab, fil.sign, fil.code, count, self.offset))
+                    .format(self.encoded_tab, fil.sign, fil.code, count, self.offset))
                 temp = cur.fetchall()
                 results_count = len(temp)
                 if results_count > 0:
@@ -463,7 +466,7 @@ class ExternalSiteDB(DBInterface):
                         break
                     cur = self.cur.execute(
                         u"SELECT DOMAIN, CODE FROM \'{0:s}\' ORDER BY rowid LIMIT {1:d} OFFSET {2:d};"
-                        .format(self.tab, 1, self.offset))
+                        .format(self.encoded_tab, 1, self.offset))
                     temp = cur.fetchone()
                     domain = ""
                     code = 0
@@ -486,7 +489,7 @@ class ExternalSiteDB(DBInterface):
             return result
 
     def site_count_with_filter(self):
-        self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\' WHERE CODE=={1:d};".format(self.tab, self.db_filter.code))
+        self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\' WHERE CODE=={1:d};".format(self.encoded_tab, self.db_filter.code))
         result = self.cur.fetchone()
         return result[0]
 

@@ -89,3 +89,73 @@ class Serializable:
     @staticmethod
     def get_deserialized_json(data: str):
         return Serializable.get_deserialized(json.loads(data))
+
+
+class NamedMutableSequence(collections.Sequence, Serializable):
+    """
+    # class Point(NamedMutableSequence):
+    # __slots__ = ('x', 'y')
+    # >>> p = Point(0, 0)
+    # >>> p.x = 10
+    # >>> p
+    # Point(x=10, y=0)
+    # >>> p.x *= 10
+    # >>> p
+    # Point(x=100, y=0)
+    """
+    __slots__ = ()
+
+    def __init__(self, *a, **kw):
+        slots = self.__slots__
+        for k in slots:
+            setattr(self, k, kw.get(k))
+
+        if a:
+            for k, v in zip(slots, a):
+                setattr(self, k, v)
+
+    def __str__(self):
+        clsname = self.__class__.__name__
+        values = ', '.join('%s=%r' % (k, getattr(self, k))
+                           for k in self.__slots__)
+        return '%s(%s)' % (clsname, values)
+
+    __repr__ = __str__
+
+    def __getitem__(self, item):
+        return getattr(self, self.__slots__[item])
+
+    def __setitem__(self, item, value):
+        return setattr(self, self.__slots__[item], value)
+
+    def __len__(self):
+        return len(self.__slots__)
+
+
+# not mutable tuple with default values, not so useful
+def namedtuple_with_defaults(typename, field_names, default_values=[]):
+    """
+    # >>> Node = namedtuple_with_defaults('Node', 'val left right')
+    # >>> Node()
+    # Node(val=None, left=None, right=None)
+    # >>> Node = namedtuple_with_defaults('Node', 'val left right', [1, 2, 3])
+    # >>> Node()
+    # Node(val=1, left=2, right=3)
+    # >>> Node = namedtuple_with_defaults('Node', 'val left right', {'right':7})
+    # >>> Node()
+    # Node(val=None, left=None, right=7)
+    # >>> Node(4)
+    # Node(val=4, left=None, right=7)
+    :param typename:
+    :param field_names:
+    :param default_values:
+    :return:
+    """
+    T = collections.namedtuple(typename, field_names)
+    T.__new__.__defaults__ = (None,) * len(T._fields)
+    if isinstance(default_values, collections.Mapping):
+        prototype = T(**default_values)
+    else:
+        prototype = T(*default_values)
+    T.__new__.__defaults__ = tuple(prototype)
+    return T

@@ -2,8 +2,9 @@ from .CategoryDB import *
 from DomainFinderSrc.MajesticCom.DataStruct import MajesticBacklinkDataStruct
 import sqlite3
 import threading
-
+from DomainFinderSrc.Utilities.StrUtility import StrUtility
 # seed db
+
 
 class CategorySiteDBDataStruct:
     def __init__(self, sub_category_name: str=""):
@@ -53,32 +54,40 @@ class CategorySiteDBInterface:
 
     def save_to_table(self, category: str, data: []):
         try:
+            category = StrUtility.make_valid_table_name(category)
             converted = [self.convert_input(x) for x in data]
             self.cur.execute(self.creation_query.format(category,))
             self.cur.executemany(self.insert_query.format(category,), converted)
             self.db.commit()
         except Exception as ex:
+            print("error write to table:", category, " count:", len(data))
+            print(ex)
             pass
 
-    def get_total(self, category: str):
+    def get_total(self, category: str, **kvargs):
         count = 0
         try:
-            self.cur.execute(u"SELECT COUNT(*) FROM \'{0:s}\';".format(category,))
+            category = StrUtility.make_valid_table_name(category)
+            parameters_str = self.convert_filter(kvargs)
+            query = "SELECT COUNT(*) FROM \'{0:s}\' "+parameters_str+";"
+            self.cur.execute(query.format(category,))
             count = self.cur.fetchone()[0]
         except Exception as ex:
-            pass
+            print(ex)
         finally:
             return count
 
-    def get_from_table(self, category: str, index: int, length: int, filter_dict: dict=None) -> []:
+    def get_from_table(self, category: str, index: int, length: int, filter_dict: dict=None, reverse_read=True) -> []:
         output = []
+        reverse_read_clause = "DESC " if reverse_read else ""
         try:
+            category = StrUtility.make_valid_table_name(category)
             self.cur.execute(u"SELECT * FROM \'{0:s}\' {1:s} "
-                             u"ORDER BY rowid LIMIT {2:d} OFFSET {3:d};"
-                             .format(category, CategorySiteDBInterface.convert_filter(filter_dict), length, index))
+                             u"ORDER BY rowid {2:s}LIMIT {3:d} OFFSET {4:d};"
+                             .format(category, CategorySiteDBInterface.convert_filter(filter_dict), reverse_read_clause,  length, index))
             output = [self.convert_output(x) for x in self.cur.fetchall()]
         except Exception as ex:
-            pass
+            print(ex)
         finally:
             return output
 
@@ -107,7 +116,6 @@ class CategorySeedSiteDB(CategorySiteDBInterface):
         if isinstance(obj, tuple) and len(obj) == 4:
             domain, tf, cf, topic_tf = obj
             return MajesticBacklinkDataStruct(ref_domain=domain, src_tf=tf, src_cf=cf, src_topical_tf=topic_tf)
-
 
 
 class CategorySiteDBManager:

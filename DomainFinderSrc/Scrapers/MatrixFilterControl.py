@@ -26,19 +26,24 @@ class FilterPool(threading.Thread, FeedbackInterface):
                                stop_event=self._stop_event, min_DA_value=self._maxtrix.da, manager=manager,
                                proxies=self._proxies)  # depend on number of accounts
 
+        workers_for_moz = manager.get_accounts(AccountType.Moz)
+        workers_for_archive = int(workers_for_moz/32)
+        workers_for_majestic = int(workers_for_moz/200)
         self._filters.append(filter_moz)
         if is_majestic_filter_on:
             filter_archive = ArchiveOrgFilter(input_queue=archive_queue, output_queue=majestic_queue,
-                                      stop_event=self._stop_event, queue_lock=self._queue_lock)  # one worker
+                                              stop_event=self._stop_event, queue_lock=self._queue_lock,
+                                              worker_number=workers_for_archive)  # min one worker
             filter_maj = MajesticFilter(input_queue=majestic_queue, output_queue=self._output_queue,
                                         stop_event=self._stop_event, TF=self._maxtrix.tf, CF=self._maxtrix.cf,
                                         CF_TF_Deviation=self._maxtrix.tf_cf_deviation, Ref_Domains=self._maxtrix.ref_domains,
-                                        manager=manager)  # depend on number of accounts
+                                        manager=manager, worker_number=workers_for_majestic)  # depend on number of accounts
             self._filters.append(filter_archive)
             self._filters.append(filter_maj)
         else:
             filter_archive = ArchiveOrgFilter(input_queue=archive_queue, output_queue=self._output_queue,
-                                      stop_event=self._stop_event, queue_lock=self._queue_lock)  # one worker
+                                              stop_event=self._stop_event, queue_lock=self._queue_lock,
+                                              worker_number=workers_for_archive)  # min one worker
             self._filters.append(filter_archive)
 
         threading.Thread.__init__(self)
@@ -86,7 +91,9 @@ class FilterController(FeedbackInterface, ExternalTempInterface):
         self._pool_input = Queue()
         self._pool = FilterPool(self._pool_input, self._output_queue, self._queue_lock, self._stop_event, self._matrix,
                                 is_majestic_filter_on=majestic_filter_on)
-        self._db_buffer = ExternalTempDataDiskBuffer(self._db_ref, self, self._stop_event, dir_path=db_dir)
+        self._db_buffer = ExternalTempDataDiskBuffer(self._db_ref, self, self._stop_event, dir_path=db_dir,
+                                                     buf_size=2500, output_f=5000) # control how data flow speed,
+                                                     # it can keep input:output ratio = 1:1 at max 10 milion data row per hour
         #FeedbackInterface.__init__(self, **kwargs)
         ExternalTempInterface.__init__(self)
         self._populate_with_state()

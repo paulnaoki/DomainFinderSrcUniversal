@@ -15,6 +15,9 @@ class SiteAccount:
         self.proxy = proxy
         self.Available = True
 
+    def __str__(self):
+        return str(self.__dict__)
+
 
 class AccountType:
     RegisterCompass = 1
@@ -23,6 +26,7 @@ class AccountType:
     ExpiredDomainNet = 4
     Majestic = 5
     Semrush = 6
+    AmazonEC2 = 7
     Unknown = 99
 
     @staticmethod
@@ -91,8 +95,8 @@ class _InternalAccountDB:
 
 
 class AccountManager:
-    def __init__(self):
-        db = _InternalAccountDB()
+    def __init__(self, db_addr=""):
+        db = _InternalAccountDB(file_dir=db_addr)
         self.AccountList = db.get_accounts()
 
     def get_accounts(self, accountTpye :int) -> []:

@@ -1,7 +1,7 @@
 import sqlite3
 from DomainFinderSrc.MajesticCom.Category import *
 from DomainFinderSrc.Utilities.Serializable import Serializable
-
+from DomainFinderSrc.Utilities.StrUtility import StrUtility
 # skeleton db
 
 
@@ -49,6 +49,7 @@ class CategoryDB:
     def get_sub_category(self, category_table: str) -> [SubCategoryStruct]:
         results = []
         try:
+            category_table = StrUtility.make_valid_table_name(category_table)
             self.cur.execute("SELECT * FROM {0:s};".format(category_table,))
             temp = self.cur.fetchall()
             for sub_category, count in temp:
@@ -67,6 +68,7 @@ class CategoryDB:
 
     def save_sub_category(self, category_table: str, sub_category_list: [SubCategoryStruct]):
         try:
+            category_table = StrUtility.make_valid_table_name(category_table)
             self.cur.execute("CREATE TABLE IF NOT EXISTS \'{0:s}\'(SUB_CATEGORY TEXT, COUNT INTEGER, "
                              "PRIMARY KEY(SUB_CATEGORY));".format(category_table,))
             self.cur.executemany(u"INSERT OR REPLACE INTO \'{0:s}\' "

@@ -17,15 +17,18 @@ from DomainFinderSrc.Scrapers.TLDs import TldUtility
 
 
 class FilterInterface(threading.Thread):
-    def __init__(self, input_queue: Queue, output_queue: Queue,  stop_event: Event, worker_number: int, queue_lock: multiprocessing.RLock=None):
+    def __init__(self, input_queue: Queue, output_queue: Queue,  stop_event: Event, worker_number: int=1,
+                 queue_lock: multiprocessing.RLock=None, throughput_debug=False):
         self._input_queue = input_queue
         self._output_queue = output_queue
         self._stop_event = stop_event
+        if worker_number <= 0:
+            worker_number = 1
+            ErrorLogger.log_error("FilterInterface", ValueError("worker number is 0, reset to 1"), "__init__")
         self._worker_number = worker_number
         self._process_queue_lock = queue_lock
+        self._is_throughput_debug = throughput_debug
         self._sync_lock = threading.RLock()
-        if worker_number == 0:
-            ErrorLogger.log_error("FilterInterface", ValueError("worker number is 0"), "__init__")
         self._job_done = 0
         threading.Thread.__init__(self)
 
@@ -71,13 +74,13 @@ class FilterInterface(threading.Thread):
                 if item is not None:
                     return item
             else:
-                time.sleep(0.01)
+                time.sleep(0.0001)
 
     def run(self):
         pool = ThreadPool(processes=self._worker_number)
         pool.imap_unordered(func=self._func_wrap, iterable=iter(self._forever_get, None))
         while not self._stop_event.is_set():
-            time.sleep(1)
+            time.sleep(0.01)
 
 
 class ArchiveOrgFilter(FilterInterface):
@@ -88,7 +91,7 @@ class ArchiveOrgFilter(FilterInterface):
         self._min_profile = min_profile
         self._min_page_size = min_page_size
         self._log_file = "Archive_count_filtering.csv"
-        FilterInterface.__init__(self, *args, worker_number=1, **kwargs)
+        FilterInterface.__init__(self, *args, **kwargs)
 
     def get_input_kwargs(self):
         return None
@@ -106,17 +109,20 @@ class ArchiveOrgFilter(FilterInterface):
                     raise ValueError("profile count is less than:" + str(self._min_profile))
                 result_ok = True
             except Exception as ex:
-                ErrorLogger.log_error("ArchiveOrgFilter.process_data()", ex, data.domain_var)
+                if not self._is_throughput_debug:
+                    ErrorLogger.log_error("ArchiveOrgFilter.process_data()", ex, data.domain_var)
             finally:
                 with self._sync_lock:
                     self._job_done += 1
                         #with self._process_queue_lock:
                     if result_ok:
-                        CsvLogger.log_to_file(self._log_file, [(data.domain, data.da, data.archive)]) # log this to file
+                        if not self._is_throughput_debug:
+                            CsvLogger.log_to_file(self._log_file, [(data.domain, data.da, data.archive)]) # log this to file
                         self._output_queue.put(data)
                         # return data
                     else:
-                        pass
+                        if self._is_throughput_debug:
+                            self._output_queue.put(data)
                         # return None
         else:
             pass
@@ -127,7 +133,7 @@ class MozFilter(FilterInterface):
     """
     Get DA about a Domain
     """
-    def __init__(self, *args, min_DA_value=5, manager: AccountManager, proxies=None,  **kwargs):
+    def __init__(self, *args, min_DA_value=5, manager: AccountManager, proxies=None, **kwargs):
         acc_manager = manager
         self._min_DA_value = min_DA_value
         self._account_list = acc_manager.get_accounts(AccountType.Moz)
@@ -167,7 +173,7 @@ class MozFilter(FilterInterface):
                         #     proxy = self._proxies[proxy_num]
                         #     account.proxy = proxy
                     break
-            time.sleep(1)
+            time.sleep(0.0001)
         return {"Account": account}
 
     def process_data(self, data: FilteredDomainData, **kwargs):
@@ -179,7 +185,10 @@ class MozFilter(FilterInterface):
                     sleep_time =random.randint(self._min_sleep_time, self._max_wait)
                     time.sleep(sleep_time)
                     moz = MozCom(account)
-                    ranking = moz.get_ranking_data(data.domain)
+                    if not self._is_throughput_debug:
+                        ranking = moz.get_ranking_data(data.domain)
+                    else:
+                        ranking = 100
                     data.da = ranking
                 else:
                     pass
@@ -195,7 +204,8 @@ class MozFilter(FilterInterface):
                     if account is not None:
                         account.Available = True
                 if data.da >= self._min_DA_value:
-                    CsvLogger.log_to_file(self._log_file, [(data.domain, data.da)]) # log this to file
+                    if not self._is_throughput_debug:
+                        CsvLogger.log_to_file(self._log_file, [(data.domain, data.da)]) # log this to file
                     self._output_queue.put(data)
 
 
@@ -208,7 +218,7 @@ class MajesticFilter(FilterInterface):
     """
     Get TF, CF of a domain
     """
-    def __init__(self, *args, TF=15, CF=15, CF_TF_Deviation=0.44, Ref_Domains=10, manager: AccountManager, **kwargs):
+    def __init__(self, *args, TF=15, CF=15, CF_TF_Deviation=0.80, Ref_Domains=10, manager: AccountManager, **kwargs):
         self._min_tf = TF
         self._min_cf = CF
         self._min_ref_domains = Ref_Domains
@@ -224,20 +234,25 @@ class MajesticFilter(FilterInterface):
         self._spam_anchor = [x.lower() for x in FileIO.FileHandler.read_lines_from_file(FilePath.get_spam_filter_anchors_file_path())]
         self._bad_country = [x.upper() for x in FileIO.FileHandler.read_lines_from_file(FilePath.get_spam_filter_bad_country_path())]
         self._account_list = acc_manager.get_accounts(AccountType.Majestic)
-        FilterInterface.__init__(self, *args, worker_number=len(self._account_list), **kwargs)
+        worker_number = kwargs["worker_number"]
+        if worker_number <= 0:
+            worker_number = len(self._account_list)
+        kwargs.update({"worker_number": worker_number})
+        FilterInterface.__init__(self, *args, **kwargs)
 
     def get_input_kwargs(self) -> dict:
         account = None
         while True:
             available_accs = None
             with self._sync_lock:
-                available_accs = [x for x in self._account_list if x.Available]
+                available_accs = self._account_list
+                # available_accs = [x for x in self._account_list if x.Available]
                 if len(available_accs) > 0:
                     account_num = random.randint(0, len(available_accs)-1)
                     account = available_accs[account_num]
                     account.Available = False
                     break
-            time.sleep(1)
+            time.sleep(0.0001)
         return {"Account": account}
 
     def _filter_tf_cf_backlink_ratio(self, majestic: MajesticCom, data: FilteredDomainData) -> FilteredDomainData:
@@ -396,15 +411,18 @@ class MajesticFilter(FilterInterface):
                     # if data.tf >= self._min_tf and data.ref_domains >= self._min_ref_domains:
                         #print("Majatic output:", data)
                         # PrintLogger.print("domain: " + data.domain + " is good.")
-                        CsvLogger.log_to_file(self._log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir()) # log this to file
+                        if not self._is_throughput_debug:
+                            CsvLogger.log_to_file(self._log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir()) # log this to file
                         self._output_queue.put(data)
                         return data
                     elif is_spammed:
-                        CsvLogger.log_to_file(self._bad_log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir())
+                        if not self._is_throughput_debug:
+                            CsvLogger.log_to_file(self._bad_log_file, [data.to_tuple()], dir_path=FilePath.get_temp_db_dir())
                         self._output_queue.put(data)
                         # return data
                     else:
-                        pass
+                        if self._is_throughput_debug:
+                            self._output_queue.put(data)
                         # return None
                         # print("domain: " + data.domain + " has exception:" + data.exception)
             else:

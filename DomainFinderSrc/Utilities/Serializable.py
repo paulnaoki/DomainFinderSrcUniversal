@@ -2,10 +2,15 @@ import collections
 from functools import reduce
 import sys
 import json
-from copy import deepcopy
+from copy import deepcopy, copy
 
 
 class Serializable:
+
+    # def __init__(self):
+    #     pass
+    #
+    # __call__ = __init__
 
     def copy_attrs(self):
         return deepcopy(self)
@@ -19,6 +24,13 @@ class Serializable:
             member_obj = getattr(self, member)
             setattr(instance, member, member_obj)
         return instance
+
+    def get_non_none_parameters(self):
+        new_dict = {}
+        for k, v in self.__dict__.items():
+            if v is not None:
+                new_dict.update({k: v})
+        return new_dict
 
     def get_serializable(self, invert_back=True):
         instance = self.copy_attrs()  # get a copy to avoid change the layout of the original obj
@@ -38,7 +50,7 @@ class Serializable:
                         member_obj[n] = item.get_serializable(invert_back)
         return instance.__dict__
 
-    def get_serializable_json(self, invert_back=True):
+    def get_serializable_json(self, invert_back=True) -> str:
         return json.dumps(self.get_serializable(invert_back))
 
     @staticmethod
@@ -91,6 +103,12 @@ class Serializable:
         return Serializable.get_deserialized(json.loads(data))
 
 
+# def _get_dict(obj) -> dict:
+#     temp = {}
+#     for item in obj.__slots__:
+#         temp.update({item: getattr(obj, item)})
+#     return temp
+
 class NamedMutableSequence(collections.Sequence, Serializable):
     """
     # class Point(NamedMutableSequence):
@@ -104,15 +122,20 @@ class NamedMutableSequence(collections.Sequence, Serializable):
     # Point(x=100, y=0)
     """
     __slots__ = ()
+    # __dict__ = {}
 
     def __init__(self, *a, **kw):
+        # self.__dict__ = {}
         slots = self.__slots__
         for k in slots:
-            setattr(self, k, kw.get(k))
+            v = kw.get(k)
+            setattr(self, k, v)
+            self.__dict__.update({k: v})
 
         if a:
             for k, v in zip(slots, a):
                 setattr(self, k, v)
+                self.__dict__.update({k: v})
 
     def __str__(self):
         clsname = self.__class__.__name__
@@ -123,10 +146,34 @@ class NamedMutableSequence(collections.Sequence, Serializable):
     __repr__ = __str__
 
     def __getitem__(self, item):
+        # return self.__dict__.get(item)
         return getattr(self, self.__slots__[item])
 
     def __setitem__(self, item, value):
-        return setattr(self, self.__slots__[item], value)
+        # self.__dict__.update({item: value})
+        setattr(self, self.__slots__[item], value)
+
+    def __getattr__(self, item):
+        return self.__dict__.get(item)
+
+    def __setattr__(self, key, value):
+        self.__dict__.update({key: value})
+        # setattr(self, self.__slots__[key], value)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        # result = NamedMutableSequence()
+        # result.__class__ = self.__class__
+        # result.__slots__ = self.__slots__
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if v is not None:
+                # setattr(result, k, copy(v))
+                setattr(result, k, deepcopy(v, memo))
+            else:
+                setattr(result, k, None)
+        return result
 
     def __len__(self):
         return len(self.__slots__)

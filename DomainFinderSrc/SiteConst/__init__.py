@@ -1,23 +1,7 @@
 import sqlite3
 from DomainFinderSrc.Utilities.FileIO import FileHandler
 from DomainFinderSrc.Utilities.FilePath import get_temp_db_dir
-
-
-class SiteAccount:
-    def __init__(self, siteType: int, userID: str, password: str="", siteLink: str="", AccessID: str=None, proxy: str="",
-                 APIkey: str=None):
-        self.siteType = siteType
-        self.userID = userID
-        self.password = password
-        self.siteLink = siteLink
-        self.APIKey = APIkey      #used by Moz.com
-        self.AccessID = AccessID  # used by Moz.com
-        self.proxy = proxy
-        self.Available = True
-
-    def __str__(self):
-        return str(self.__dict__)
-
+from DomainFinderSrc.Utilities.Serializable import Serializable
 
 class AccountType:
     RegisterCompass = 1
@@ -27,6 +11,7 @@ class AccountType:
     Majestic = 5
     Semrush = 6
     AmazonEC2 = 7
+    BuyProxyOrg = 8
     Unknown = 99
 
     @staticmethod
@@ -39,6 +24,22 @@ class AccountType:
                 AccountType.Majestic: "Majestic",
                 AccountType.Semrush: "Semrush",
                 }.get(siteType, "NotSupported")
+
+
+class SiteAccount(Serializable):
+    def __init__(self, siteType: int=AccountType.Unknown, userID: str="", password: str="", siteLink: str="", AccessID: str="", proxy: str="",
+                 APIkey: str=None):
+        self.siteType = siteType
+        self.userID = userID
+        self.password = password
+        self.siteLink = siteLink
+        self.APIKey = APIkey      #used by Moz.com
+        self.AccessID = AccessID  # used by Moz.com
+        self.proxy = proxy
+        self.Available = True
+
+    def __str__(self):
+        return str(self.__dict__)
 
 
 class _InternalAccountDB:

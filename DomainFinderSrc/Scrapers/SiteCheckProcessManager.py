@@ -12,6 +12,7 @@ from DomainFinderSrc.Utilities.Logging import *
 from DomainFinderSrc.Scrapers.ExternalSiteChecker import WhoisChecker, WhoisCheckerState
 from DomainFinderSrc.Utilities.QueueManager import *
 from multiprocessing import Process
+import os
 
 
 class process_iter_arg:
@@ -180,6 +181,16 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
         #                                self.max_page_per_site, self.outputQueue, self.process_site_info)
         self.input_iter = SiteInputIter(self.inputQueue, func=site_check_process, external_stop=self.stop_event)
 
+    def _create_all_file_dirs(self):
+        try:
+            FileHandler.create_file_if_not_exist(get_log_dir())
+            FileHandler.create_file_if_not_exist(get_recovery_dir_path())
+            FileHandler.create_file_if_not_exist(get_temp_db_dir())
+            FileHandler.create_file_if_not_exist(get_task_backup_dir())
+            FileHandler.create_file_if_not_exist(get_db_buffer_default_dir())
+        except Exception as ex:
+            ErrorLogger.log_error("SiteCheckProcessManager", ex, "_create_all_file_dirs()")
+
     def clear_cache(self):
         try:
             FileHandler.clear_dir(get_log_dir())
@@ -189,6 +200,14 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
             FileHandler.clear_dir(get_db_buffer_default_dir())
         except Exception as ex:
             ErrorLogger.log_error("SiteCheckProcessManager", ex, "clear_cache()")
+
+    def set_system_limit(self):
+        try:
+            os.system('sudo -s')
+            os.system('ulimit -n 204800')
+            # os.system('ulimit -s 1024')
+        except Exception as ex:
+            print(ex)
 
     def get_temp_result_count(self):
         #with self.temp_result_lock:
@@ -215,9 +234,11 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
                 pass
 
     def get_state(self) -> SiteCheckProcessState:
+        print("get state from slave crawler")
         with self.state_lock:
             state = SiteCheckProcessState(self.job_all, self.job_done, self.job_waiting, self.total_page_done,
                                           self.average_page_per_site, self.get_temp_result_count())
+        print("get state from slave crawler finished")
         return state
 
     def get_filter_progress(self):
@@ -280,12 +301,14 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
     def add_page_done(self, number_page_done: int):  # make sure it is thread safe
         with self.state_lock:
             self.total_page_done += number_page_done
+        time.sleep(0.001)
 
     def site_finished(self):
         # print("one more site done")
         with self.state_lock:
             self.job_done += 1
             self.average_page_per_site = self.total_page_done/self.job_done
+        time.sleep(0.001)
 
     def set_stop(self):
         self.stop_event.set()
@@ -308,13 +331,22 @@ class SiteCheckProcessManager(Thread, SiteCheckerController):
                                       mem_limit=mem_limit, external_stop_event=self.stop_event)
         self.whois_process.start()
 
+    def queue_failure_reset(self):
+        manager, self.outputQueue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Output)
+        return self.outputQueue
+
     def run(self):
+        # self.set_system_limit()
+        self._create_all_file_dirs()
         self.whois_queue_process.start()
         whois_thread = Thread(target=self.checking_whois)
         trash_clean_thread = Thread(target=self.clear_trash)
         manager, self.outputQueue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Output)
-        self.output_thread = outputThread(0, self.threadPrfix+"Output", self.stop_event, self.outputQueue,
-                                  delegate=self.output_delegate)
+        # self.output_thread = outputThread(0, self.threadPrfix+"Output", self.stop_event, self.outputQueue,
+        #                           delegate=self.output_delegate, failsure_reset_queue=self.queue_failure_reset)
+        self.output_thread = outputThread(threadID=0, name=self.threadPrfix+"Output", stop_event=self.stop_event,
+                                          inputQ=self.outputQueue, delegate=self.output_delegate,
+                                          failsure_reset_queue=self.queue_failure_reset)
         self.output_thread.start()
         trash_clean_thread.start()
         whois_thread.start()

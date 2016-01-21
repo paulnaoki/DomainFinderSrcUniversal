@@ -19,7 +19,8 @@ from __future__ import print_function
 from struct import unpack
 import array
 
-from DomainFinderSrc.xlrd.timemachine import *
+from xlrd.timemachine import *
+
 
 
 ##

@@ -1,5 +1,3 @@
-from DomainFinderSrc.xlrd.info import __VERSION__
-
 # <p>Copyright (c) 2005-2012 Stephen John Machin, Lingfo Pty Ltd</p>
 # <p>This module is part of the xlrd package, which is released under a
 # BSD-style licence.</p>
@@ -302,23 +300,12 @@ from . import licences
 ##
 
 import sys, zipfile, pprint
-from DomainFinderSrc.xlrd import timemachine, book, licences, xlsx
-from DomainFinderSrc.xlrd.biffh import (
-    XLRDError,
-    biff_text_from_num,
-    error_text_from_code,
-    XL_CELL_BLANK,
-    XL_CELL_TEXT,
-    XL_CELL_BOOLEAN,
-    XL_CELL_ERROR,
-    XL_CELL_EMPTY,
-    XL_CELL_DATE,
-    XL_CELL_NUMBER
-    )
-from DomainFinderSrc.xlrd.formula import * # is constrained by __all__
-from DomainFinderSrc.xlrd.book import Book, colname #### TODO #### formula also has `colname` (restricted to 256 cols)
-from DomainFinderSrc.xlrd.sheet import empty_cell
-from DomainFinderSrc.xlrd.xldate import XLDateError, xldate_as_tuple
+from xlrd import timemachine, xlsx, licences, book
+from xlrd.biffh import (
+    XLRDError
+)
+from xlrd.formula import * # is constrained by __all__
+from xlrd.book import Book  #### TODO #### formula also has `colname` (restricted to 256 cols)
 
 if sys.version.startswith("IronPython"):
     # print >> sys.stderr, "...importing encodings"
@@ -440,7 +427,7 @@ def open_workbook(filename=None,
 # @param unnumbered If true, omit offsets (for meaningful diffs).
 
 def dump(filename, outfile=sys.stdout, unnumbered=False):
-    from DomainFinderSrc.xlrd.biffh import biff_dump
+    from xlrd.biffh import biff_dump
     bk = Book()
     bk.biff2_8_load(filename=filename, logfile=outfile, )
     biff_dump(bk.mem, bk.base, bk.stream_len, 0, outfile, unnumbered)
@@ -452,7 +439,7 @@ def dump(filename, outfile=sys.stdout, unnumbered=False):
 # @param outfile An open file, to which the summary is written.
 
 def count_records(filename, outfile=sys.stdout):
-    from DomainFinderSrc.xlrd.biffh import biff_count_records
+    from xlrd.biffh import biff_count_records
     bk = Book()
     bk.biff2_8_load(filename=filename, logfile=outfile, )
     biff_count_records(bk.mem, bk.base, bk.stream_len, outfile)

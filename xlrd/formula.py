@@ -14,7 +14,7 @@ from __future__ import print_function
 import copy
 from struct import unpack
 
-from .timemachine import *
+from xlrd.timemachine import *
 from DomainFinderSrc.xlrd.biffh import unpack_unicode_update_pos, unpack_string_update_pos, \
     XLRDError, hex_char_dump, error_text_from_code
 

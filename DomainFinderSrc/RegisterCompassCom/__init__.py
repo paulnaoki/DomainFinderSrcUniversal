@@ -10,7 +10,7 @@ from DomainFinderSrc.RegisterCompassCom.Elements.TLDElement import RegTLD
 from DomainFinderSrc.RegisterCompassCom.Elements.MajesticElements import MajesticElements
 from DomainFinderSrc.RegisterCompassCom.Elements.SearchActionElements import DownloadActionElements
 from DomainFinderSrc.RegisterCompassCom.Selectors.MatrixElementSelector import MatrixCompareCondition, MatrixElementSelector
-from DomainFinderSrc import xlrd
+# from DomainFinderSrc import xlrd
 
 
 class ReCompConst:
@@ -67,22 +67,22 @@ class RegComp:
         self.driver.switch_to_default_content()
         return self.downloadLink
 
-    def parse_result_using_xrld(self) -> []:
-        if self.downloadLink is not None:
-            response = request.urlopen(self.downloadLink)
-            content = response.read()
-            workbook = xlrd.open_workbook(self.downloadLink, file_contents=content)
-            worksheet = workbook.sheet_by_index(0)
-            num_rows = worksheet.nrows - 1
-            curr_row = -1
-            domainList = []
-            while curr_row < num_rows:
-                curr_row += 1
-                if curr_row > 1:
-                    domain = worksheet.cell_value(curr_row, 0)
-                    domainList.append(domain)
-                    print(domain)
-            return domainList
+    # def parse_result_using_xrld(self) -> []:
+    #     if self.downloadLink is not None:
+    #         response = request.urlopen(self.downloadLink)
+    #         content = response.read()
+    #         workbook = xlrd.open_workbook(self.downloadLink, file_contents=content)
+    #         worksheet = workbook.sheet_by_index(0)
+    #         num_rows = worksheet.nrows - 1
+    #         curr_row = -1
+    #         domainList = []
+    #         while curr_row < num_rows:
+    #             curr_row += 1
+    #             if curr_row > 1:
+    #                 domain = worksheet.cell_value(curr_row, 0)
+    #                 domainList.append(domain)
+    #                 print(domain)
+    #         return domainList
 
     def parse_result_csv(self) -> []:  # use this
         if self.downloadLink is not None:

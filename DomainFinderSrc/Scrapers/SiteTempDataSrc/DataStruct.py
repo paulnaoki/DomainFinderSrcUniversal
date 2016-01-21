@@ -23,6 +23,23 @@ class FilteredDomainData(Serializable):
         return (self.domain, self.tf, self.cf, self.da, self.ref_domains, self.domain_var, self.backlinks, self.topic,
                 self.price, self.archive, self.found, self.tf_cf_deviation, self.exception)
 
+    @staticmethod
+    def from_tuple(data: tuple):
+        # "DOMAIN", "TF", "CF", "DA", "ARCHIVE", "FOUND", "PRICE", "REF DOMAINS", "DOMAIN VAR", "BACKLINKS", "TOPIC", "EXCEPTION"
+        item = FilteredDomainData()
+        if len(data) == 13:
+            item.domain, item.tf, item.cf, item.da, item.ref_domains, item.domain_var, item.backlinks, item.topic,\
+            item.price, item.archive, item.found, item.tf_cf_deviation, item.exception = data
+        elif len(data) == 12:
+            item.domain, item.tf, item.cf, item.da, \
+            item.archive, item.found, item.price, item.ref_domains, \
+            item.domain_var, item.backlinks, item.topic, item.exception = data
+        elif len(data) == 11:
+            item.domain, item.tf, item.cf, item.da, \
+            item.archive, item.found, item.price, item.ref_domains, \
+            item.domain_var, item.backlinks, item.topic = data
+        return item
+
     def __str__(self):
         return str(self.__dict__)
 

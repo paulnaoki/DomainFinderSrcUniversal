@@ -31,6 +31,7 @@ class SiteTempDataDiskWithBuff(SiteTempDataDisk, FileBuffInterface):
             return
         if isinstance(data, FileBuffDefaultState):
             self._total_record = data.all_data
+            print("self._output_counter value change in SiteTempDataDiskWithBuff.recovery_from_power_cut")
             self._output_counter = data.progress
             self.ref_obj.set_internal_page_progress_index(data.progress)
         else:
@@ -53,6 +54,7 @@ class SiteTempDataDiskWithBuff(SiteTempDataDisk, FileBuffInterface):
         super(SiteTempDataDiskWithBuff, self).append_to_buffer(new_data_list, convert_tuple)
 
     def reset(self):
+        self.reset_event.set()
         PrintLogger.print("in datasource going to reset")
         self.set_continue_lock(False)
         self._is_reading.clear()
@@ -60,6 +62,7 @@ class SiteTempDataDiskWithBuff(SiteTempDataDisk, FileBuffInterface):
         SiteTempDataDisk.reset(self)
         FileBuffInterface.reset(self)
         PrintLogger.print("in datasource reset completed")
+        self.reset_event.clear()
 
     def __iter__(self):
         return FileBuffInterface.__iter__(self)

@@ -44,7 +44,7 @@ class EC2Resource:
             target_tag = "{{{0:s}}}spotInstanceRequestId".format(name_space,)
             request_ids = [item.text for item in element.iter(target_tag)]
             info = SpotRequestInfo()
-            info.req_id, info.state, info.status, info.instance_ids = request_id, state, status_code, request_ids
+            info.req_id, info.state, info.status, info.ids = request_id, state, status_code, request_ids
             return info
         except Exception as ex:
             print(ex)
@@ -63,6 +63,9 @@ class EC2Resource:
         :param dry_run:
         :return: tuple(a list of CancelledSpotInstanceResponse, True if all instances has met the target_states)
         """
+        if not len(request_ids) > 0:
+            return [], True
+
         parameters = {
         }
         counter = 1
@@ -176,10 +179,8 @@ class EC2Resource:
             return False
 
     @staticmethod
-    def _parse_instances_info(account: SiteAccount, zone: str, parameters: dict, dry_run=False):
+    def _parse_reservation_list(element):
         try:
-            element = ServiceUtility.make_request(account, EndPoint.EC2, zone, "DescribeInstances",
-                                                  dry_run, parameters, use_https=True)
             name_space, tag = ServiceUtility.get_tag_uri_and_name(element)
             InstanceRequestSet = [x for x in element.iter("{{{0:s}}}instancesSet".format(name_space,))]
             # InstanceRequestSet = element.find("{{{0:s}}}instancesSet".format(name_space,))
@@ -187,7 +188,7 @@ class EC2Resource:
             target_tag = "{{{0:s}}}item".format(name_space,)
             for item_set in InstanceRequestSet:
                 for item in item_set.findall(target_tag):
-                    print(item.tag)
+                    # print(item.tag)
                     state = item.find("{{{0:s}}}instanceState".format(name_space,))
                     item_status = state[1].text
                     item_code = state[0].text
@@ -211,6 +212,15 @@ class EC2Resource:
             return None
 
     @staticmethod
+    def _parse_instances_info(account: SiteAccount, zone: str, parameters: dict, dry_run=False):
+        try:
+            element = ServiceUtility.make_request(account, EndPoint.EC2, zone, "DescribeInstances",
+                                                  dry_run, parameters, use_https=True)
+            return EC2Resource._parse_reservation_list(element)
+        except:
+            return None
+
+    @staticmethod
     def get_instances_by_tag(account: SiteAccount, zone: str, tag_key: str,  tag_value, dry_run=False):
         parameters = {
             "Filter.1.Name": "tag:{0:s}".format(tag_key,),
@@ -224,6 +234,18 @@ class EC2Resource:
     @staticmethod
     def start_normal_instances(account: SiteAccount, image_id: str, key_name: str, security_group: str,
                                instance_type: str, zone: str, instance_count: int, dry_run=False):
+        """
+        http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RunInstances.html
+        :param account:
+        :param image_id:
+        :param key_name:
+        :param security_group:
+        :param instance_type:
+        :param zone:
+        :param instance_count:
+        :param dry_run:
+        :return:
+        """
         parameters = {
             "MaxCount": instance_count,
             "MinCount": instance_count,
@@ -237,9 +259,10 @@ class EC2Resource:
         try:
             element = ServiceUtility.make_request(account, EndPoint.EC2, zone, "RunInstances",
                                                   dry_run, parameters, use_https=True)
-            print(element)
+            return EC2Resource._parse_reservation_list(element)
         except Exception as ex:
             print(ex)
+            return None
 
 
     @staticmethod

@@ -43,8 +43,10 @@ class SiteCheckerManager(Thread, SiteCheckerController):
                                                  self.outputQueue, self.input_lock, self.output_lock,
                                                  page_max_level= self.page_max_level,
                                                  max_page_per_site=self.max_page_per_site))
-        self.output_thread = outputThread(0, self.threadPrfix+"Output", self._stop_event,  self.outputQueue,
-                                          self.output_lock, self.output_delegate)
+        # self.output_thread = outputThread(0, self.threadPrfix+"Output", self._stop_event,  self.outputQueue,
+        #                                   self.output_lock, self.output_delegate)
+        self.output_thread = outputThread(threadID=0, name=self.threadPrfix+"Output", stop_event=self._stop_event,
+                                          inputQ=self.outputQueue, delegate=self.output_delegate)
 
     def run(self):
         if self.add_jobs_to_queue(self.tempList):
@@ -141,13 +143,14 @@ class inputThread(Thread):
 
 
 class outputThread(Thread):
-    def __init__(self, threadID, name: str, stop_event: multiprocessing.Event, inputQ, delegate=None):
+    def __init__(self, threadID, name: str, stop_event: multiprocessing.Event, inputQ, delegate=None, failsure_reset_queue=None):
         Thread.__init__(self)
         self.threadID = threadID
         #manager, result_queue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Input)
         self.inputQ = inputQ
         self.name = name
         self.stop_event = stop_event
+        self.failure_reset_queue_callback = failsure_reset_queue
         #self.queueLock = queueLock
         self.delegate = delegate
 
@@ -159,14 +162,24 @@ class outputThread(Thread):
     def process_data_output(self):
         while not self.stop_event.is_set():
             self.consume_data()
-            time.sleep(0.1)
+            time.sleep(0.001)
 
     def consume_data(self):
-        if not self.inputQ.empty():
-            #with self.queueLock:
-            data = self.inputQ.get()
+        #with self.queueLock:
+        data = None
+        try:
+            if not self.inputQ.empty():
+                data = self.inputQ.get(2)
+        except:
+            if self.inputQ is None:
+                self.inputQ = self.failure_reset_queue_callback()
+            # if self.failure_reset_queue_callback is not None:
+            #     self.inputQ = self.failure_reset_queue_callback()
+        finally:
             if self.delegate is None:
                 print(data)
-            else:
+            elif data is not None:
                 self.delegate(data)
+
+
 

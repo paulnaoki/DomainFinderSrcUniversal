@@ -3,13 +3,18 @@ from DomainFinderSrc.MiniServer.DomainMiningSlaveServer import MiningSlaveServer
 from DomainFinderSrc.MiniServer.DomainMiningMasterServer import MiningMasterServer
 from DomainFinderSrc.Scrapers.SiteCheckProcessManager import SiteCheckProcessManager
 import time
+from DomainFinderSrc.MiniServer.CpuServer import CpuServer
+
 
 class ServerTest(TestCase):
     def testSlave(self):
         MiningSlaveServer.main(PORT=9999)
 
     def testHost(self):
-        MiningMasterServer.main(PORT=9999)
+        MiningMasterServer.main(PORT=9998)
+
+    def testCpuServer(self):
+        CpuServer.main(PORT=9999)
 
     def testSlaveObj(self):
         site_list = ["http://www.bbc.co.uk/", "techcrunch.com", "mashable.com/category/tech/", "www.techradar.com/",

@@ -10,6 +10,9 @@ class SubCategoryStruct(Serializable):
         self.sub_category = sub_category
         self.count = count
 
+    def __str__(self):
+        return str(self.to_tuple())
+
     def to_tuple(self):
         return str(self.sub_category), self.count
 
@@ -18,6 +21,8 @@ class CategoryStruct(Serializable):
     def __init__(self, category_name: str="", sub_category_list: [SubCategoryStruct]=None):
         self.category_name = category_name
         self.sub_category = sub_category_list
+        self.sub_category_names = []
+        self.sub_category_sum = 0
         if self.sub_category is None:
             self.sub_category = []
         self.re_calcuate_stats()
@@ -27,6 +32,12 @@ class CategoryStruct(Serializable):
         # else:
         #     self.sub_category_names = []
         #     self.sub_category_sum = 0
+
+    def __str__(self):
+        str_builder = "main category: "+self.category_name+" count:"+str(self.sub_category_sum) + "\n"
+        for item in self.sub_category:
+            str_builder += str(item) + "\n"
+        return str_builder
 
     def re_calcuate_stats(self):
         self.sub_category_sum = sum([item.count for item in self.sub_category]) if self.sub_category is not None else 0
@@ -131,9 +142,11 @@ class CategoryDBManager:
         if isinstance(main_category, CategoryStruct):
             category_name = str(category)
             for item in main_category.sub_category:
-                if isinstance(item, SubCategoryStruct) and str(item) == category_name:
-                    found = item
-                    break
+                if isinstance(item, SubCategoryStruct):
+                    item_str = str(item.sub_category)
+                    if item_str == category_name:
+                        found = item
+                        break
             if found is None:
                 found = SubCategoryStruct(category)
                 main_category.sub_category.append(found)

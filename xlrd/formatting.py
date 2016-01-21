@@ -15,8 +15,8 @@ from __future__ import print_function
 DEBUG = 0
 import re
 from struct import unpack
-from DomainFinderSrc.xlrd.timemachine import *
-from DomainFinderSrc.xlrd.biffh import BaseObject, unpack_unicode, unpack_string, \
+from xlrd.timemachine import *
+from xlrd.biffh import BaseObject, unpack_unicode, unpack_string, \
     upkbits, upkbitsL, fprintf, \
     FUN, FDT, FNU, FGE, FTX, XL_CELL_NUMBER, XL_CELL_DATE, \
     XL_FORMAT, XL_FORMAT2, \

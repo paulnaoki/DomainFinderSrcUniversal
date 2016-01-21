@@ -230,3 +230,8 @@ class ArchiveOrgTest(TestCase):
             explorer.run()
             archive_detail = explorer.get_archive_detail()
             CsvLogger.log_to_file_path(save_path, [archive_detail.to_tuple()])
+
+    def testArchiveTimeStamps(self):
+        domain = "susodigital.com"
+        langs = ArchiveOrg.get_archives_lang(domain)
+        print(langs)

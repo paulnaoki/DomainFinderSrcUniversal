@@ -17,6 +17,7 @@ from DomainFinderSrc.Scrapers.SiteTempDataSrc.ExternalTempDataDiskBuffer import 
 import os
 import multiprocessing
 from DomainFinderSrc.Utilities.QueueManager import *
+from collections import deque
 
 
 class SiteCheckerState:
@@ -96,6 +97,8 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         domain_data = LinkChecker.get_root_domain(full_link, False)
         self.root_domain = domain_data[1]
         self.sub_domain = domain_data[4]
+        self.domain_suffix = domain_data[5]
+        self.sub_domain_no_local = self.sub_domain.strip(self.domain_suffix)
         if self.scheme == "":
             self.scheme = "http"
         if self.domain == "":
@@ -134,10 +137,13 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self.cache_list = []  # internal page cache
         self.page_need_look_up_temp = 0
         self.cache_list.append(self.domain_link)
-        self.cache_list.append(self.scheme + "://www."+self.sub_domain)
+        if "www." not in self.sub_domain:
+            self.cache_list.append(self.scheme + "://www."+self.sub_domain)
         self.cache_list.append(self.scheme + "://" + self.domain)
         self.page_need_look_up = self.data_source.count_all()
-        self.cache_size = 1000  # create a small cache list to avoid going to check link in file system with lots of read and write
+        self.cache_size = 500  # create a small cache list to avoid going to check link in file system with lots of read and write
+        self._double_check_cache_lock = threading.RLock()
+        self._double_check_cache = deque(maxlen=self.cache_size)
         self.external_cache_list = []
         self.external_cache_size = 500  # cache that hold external sites
         self.external_links_checked = 0
@@ -157,10 +163,10 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
                      "if you have an enquiry, please email to: abuse-report@terrykyleseoagency.com)"
         self.agent_from = "abuse-report@terrykyleseoagency.com"
         if check_robot_text:
-            self.robot_agent = LinkChecker.get_robot_agent(self.root_domain, protocol=self.scheme)
+            self.robot_agent = LinkChecker.get_robot_agent(self.sub_domain, protocol=self.scheme)
         else:
             self.robot_agent = None
-        self.site_crawl_delay = 1.0
+        self.site_crawl_delay = 0.60
 
         if isinstance(self.robot_agent, Rules):
             delay_temp = self.robot_agent.delay(self.agent)
@@ -171,10 +177,12 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self._speed_penalty_count = 0
         self._speed_penalty_threshold = 10
         self._progress_logging_speed = 120
-        self._output_frequency = 1000
+        self._output_period = 120
+        self._output_batch_size = 100
         self._death_wish_sent = False
         SiteChecker._is_lxml_parser_exist()
         self._output_thread = None
+        self._output_queue = None
         self.progress_logger = ProgressLogger(self._progress_logging_speed, self, self._stop_event)
         self._status = "Start"
         self._populate_with_state()  # restore laste known state
@@ -182,29 +190,50 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
 
     # def _empty_external_links_db(self):
     #     if self.output_queue is not None:
+    def _put_result_in_output_queue_loop(self, item_list: list):
+        if not self._stop_event.is_set():
+            try:
+                self._output_queue.put(item_list, True, 2)
+            except Exception as ex:
+                if self._output_queue is None:
+                    manager, self._output_queue = get_queue_client(QueueManager.MachineSettingCrawler,
+                                                             QueueManager.Method_Whois_Input)
+                time.sleep(0.1)
+                ErrorLogger.log_error("SiteChecker._get_external_links_to_queue", self.sub_domain+" "+str(ex))
+                self._put_result_in_output_queue_loop(item_list)
 
     def _get_external_links_to_queue(self):
-        interval = 1/self._output_frequency
-        manager, result_queue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Input)
-        self.output_queue = result_queue  # override output_queue
-        if result_queue is None:
-            ErrorLogger.log_error("SiteChecker._get_external_links_to_queue()", ValueError("result queue is none, cannot put item in queue."))
-        else:
-            for item in self._external_db_buffer:
-                if self.external_links_checked >= self._external_db_buffer.count_all():
-                # if self._stop_event.is_set() and self.external_links_checked >= self._external_db_buffer.count_all():
+        ref_time = time.time()
+        manager, self._output_queue = get_queue_client(QueueManager.MachineSettingCrawler, QueueManager.Method_Whois_Input)
+        self.output_queue = self._output_queue  # override output_queue
+        # if result_queue is None:
+        #     ErrorLogger.log_error("SiteChecker._get_external_links_to_queue()", ValueError("result queue is none, cannot put item in queue."))
+        # else:
+        batch = list()
+        counter = 0
+        for item in self._external_db_buffer:
+            if self._stop_event.is_set() or self.external_links_checked >= self._external_db_buffer.count_all():
+                try:
+                    manager.shutdown()
+                except:
+                    pass
+                finally:
+                    # print("exist _get_external_links_to_queue")
+            # if self._stop_event.is_set() and self.external_links_checked >= self._external_db_buffer.count_all():
                     break
-                elif isinstance(item, tuple):
-                #elif self.output_queue is not None and isinstance(item, tuple):
-                    try:
-                        #print("put item into queue:", item)
-                        result_queue.put((item[0], item[1]), True, 2)
-                        #self.output_queue.put((item[0], item[1]), True, 2)
-                        self.external_links_checked += 1
-                    except Exception as ex:
-                        ErrorLogger.log_error("SiteChecker._get_external_links_to_queue", ex)
+            elif isinstance(item, tuple):
+                # print("outputting item: ", str(item))
+                batch.append((item[0], item[1]))
+                counter += 1
+            if len(batch) > 0:
+                current_time = time.time()
+                if current_time - ref_time or len(batch) >= self._output_batch_size:
+                    self._put_result_in_output_queue_loop(batch)
+                    self.external_links_checked += len(batch)
+                    ref_time = time.time()
+                    batch.clear()
 
-                time.sleep(interval)
+            time.sleep(0.0001)
 
     @staticmethod
     def _is_lxml_parser_exist():
@@ -244,8 +273,8 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
             raise ValueError
         self.task_control_max = concurrent_task
         self.task_control_counter = concurrent_task
-        min_page_per_s = concurrent_task/45
-        self._speed_penalty_threshold = int(self._progress_logging_speed * min_page_per_s)
+        min_page_per_s = concurrent_task/20
+        self._speed_penalty_threshold = self._progress_logging_speed * min_page_per_s
         if self.site_crawl_delay > 1/min_page_per_s:
             ErrorLogger.log_error("SiteChecker._set_task_control_max()",
                                   ValueError("site has crawl delay greater than mas delay."), self.domain_link)
@@ -357,13 +386,28 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         self.cache_list.clear()
         self.addtional_clear()
 
-    def acquire_task(self, level: int):
+    def acquire_task(self, level: int, link: str):
+        tasked_acquired = True
+        if link.endswith('/'):
+            temp = link
+        else:
+            temp = link + '/'
         with self.task_control_lock:
+            if len(self._double_check_cache) > 0:
+                if temp in self._double_check_cache:
+                    print("duplicate link found:", link)
+                    tasked_acquired = False
+                else:
+                    if len(self._double_check_cache) >= self.cache_size:
+                        self._double_check_cache.popleft()
+                    self._double_check_cache.append(temp)
             self.task_control_counter -= 1
             self.page_allocated += 1
-            if level > self.current_level:
-                self.current_level = level
-            time.sleep(self.site_crawl_delay)
+            if tasked_acquired:
+                if level > self.current_level:
+                    self.current_level = level
+            # time.sleep(self.site_crawl_delay)
+        return tasked_acquired
 
     def release_task(self, new_page: int):
         with self.task_control_lock:
@@ -453,10 +497,17 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
         if len(self.cache_list) > self.cache_size:
             return
         else:
-            self.cache_list.append(link)
+            if link.endswith('/'):
+                self.cache_list.append(link)
+            else:
+                self.cache_list.append(link+'/')
 
     def is_link_in_cache(self, link):
-        return True if link in self.cache_list else False
+        if link.endswith('/'):
+            temp = link
+        else:
+            temp = link + '/'
+        return True if temp in self.cache_list else False
 
     def reset_as(self, domain: str, link: str=""):  # reset the target domain
         PrintLogger.print("crawl reset as: "+domain)
@@ -496,17 +547,23 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
             #     self.reset_as(new_domain)
             #     self._status = "Work"
             #     self.begin_crawl()
-
+            # print("going to stop all.")
             self.stop()
             self.clear()
+
+            self.data_source.additional_finish_procedures()
+            # print("going to finish output buffer.")
+            self._external_db_buffer.terminate()
+            # print("going to stop output_thread.")
             if self._output_thread.is_alive():
                 self._output_thread.join()
-            self.data_source.additional_finish_procedures()
-            self._external_db_buffer.terminate()
         PrintLogger.print("finished naturally: "+self.domain_link)
+        # print("finished naturally.")
         self._finihsed = True
             #calling this at the end of operation
         PrintLogger.print("send last response")
+        # print("send last response")
+        # print("send last response.")
         self._end_sending_feedback()
         if self._memory_control_terminate_event is not None:
             self._memory_control_terminate_event.set()
@@ -516,14 +573,15 @@ class SiteChecker(FeedbackInterface, SiteTempDataSrcRefInterface, ProgressLogInt
             self._finihsed = True
             PrintLogger.print("start sudden death: "+self.orginal_link)
             #self.stop()
-            self._stop_event.set()
-            if isinstance(self._output_thread, threading.Thread):
-                if self._output_thread.is_alive():
-                    self._output_thread.join()
+            self.stop()
+
             self.clear()
             self.data_source.set_continue_lock(False)
             self.data_source.additional_finish_procedures()
             self._external_db_buffer.terminate()
+            if isinstance(self._output_thread, threading.Thread):
+                if self._output_thread.is_alive():
+                    self._output_thread.join()
                 #calling this at the end of operation
             PrintLogger.print("send last response")
             self._end_sending_feedback()
@@ -605,14 +663,19 @@ class PageChecker:
         # if isinstance(checker.robot_agent, robotparser.RobotFileParser):
         #     if not checker.robot_agent.can_fetch(useragent=checker.agent, url=page.link):
         #         return [], []
-        #print("checking internal_page", page)
+        # print("checking internal_page", page)
 
         if isinstance(checker.robot_agent, Rules):
-            if not checker.robot_agent.allowed(page.link, agent=checker.agent):
+            try:
+                if not checker.robot_agent.allowed(page.link, agent=checker.agent):
+                    return [], []
+            except:
                 return [], []
 
         use_lxml_parser = checker.use_lxml_parser()
-        response = LinkChecker.get_page_source(page.link, timeout, agent=checker.agent, from_src=checker.agent_from)
+        with checker.task_control_lock:
+            time.sleep(checker.site_crawl_delay)
+            response = LinkChecker.get_page_source(page.link, timeout, agent=checker.agent, from_src=checker.agent_from)
         if response is None or response.status_code == ResponseCode.LinkError:
             return [], []
         paras = urlsplit(page.link)
@@ -634,7 +697,8 @@ class PageChecker:
                     continue
             except:
                 continue
-            if str(link_domain).endswith(checker.root_domain):
+            # if str(link_domain).endswith(checker.root_domain):
+            if checker.sub_domain_no_local in link_domain:  # important change
                 if checker.data_source.all_record > checker.max_page:
                     continue
                 link_type = OnSiteLink.TypeOnSite
@@ -659,33 +723,33 @@ class PageChecker:
 
     @staticmethod
     def crawl_page(checker: SiteChecker, page: OnSiteLink, timeout=10):  # update self.page_list
-        checker.acquire_task(page.link_level)
-        new_page_counter = 0
-        external_count = 0
-        #is_external = True if page.link_type == OnSiteLink.TypeOutbound else False
-        try:
-
-           # print(root_domain, " len:", len(root_domain), " origional: ", checker.root_domain, " len:", len(checker.root_domain))
-            #if not is_external:  # exeternal domain
-            # page_count = checker.page_allocated
-            # print(page_count, " ", page.link)
-            pages, external_page = PageChecker.check_internal_page(checker, page, timeout)
-            new_page_counter = len(pages)
-            if new_page_counter > 0:
-                checker.data_source.append_many(pages, False)
-            external_count = len(external_page)
-            if external_count > 0:
-                checker._external_db_buffer.append_to_buffer(external_page, convert_tuple=False)
-            # else:
-            #     PageChecker.check_external_page(checker, page, timeout)
-        except Exception as ex:
-            PrintLogger.print(ex)
-            msg = "crawl_page(): " + str(checker.page_allocated) + " " + str(page)
-            ErrorLogger.log_error("PageChecker", ex, msg)
-        finally:
-            checker.release_task(new_page_counter)
-            # page_count = checker.page_allocated
-            # print(page_count, " ", page.link)
+            new_page_counter = 0
+            external_count = 0
+            #is_external = True if page.link_type == OnSiteLink.TypeOutbound else False
+            try:
+                # print("checking:", page.link)
+                if checker.acquire_task(page.link_level, page.link):
+                   # print(root_domain, " len:", len(root_domain), " origional: ", checker.root_domain, " len:", len(checker.root_domain))
+                    #if not is_external:  # exeternal domain
+                    # page_count = checker.page_allocated
+                    # print(page_count, " ", page.link)
+                    pages, external_page = PageChecker.check_internal_page(checker, page, timeout)
+                    new_page_counter = len(pages)
+                    if new_page_counter > 0:
+                        checker.data_source.append_many(pages, False)
+                    external_count = len(external_page)
+                    if external_count > 0:
+                        checker._external_db_buffer.append_to_buffer(external_page, convert_tuple=False)
+                    # else:
+                    #     PageChecker.check_external_page(checker, page, timeout)
+            except Exception as ex:
+                PrintLogger.print(ex)
+                msg = "crawl_page(): " + str(checker.page_allocated) + " " + str(page)
+                ErrorLogger.log_error("PageChecker", ex, msg)
+            finally:
+                checker.release_task(new_page_counter)
+                # page_count = checker.page_allocated
+                # print(page_count, " ", page.link)
 
     # @staticmethod
     # def crawl_page_for_iter(checker: SiteChecker, page: OnSiteLink):

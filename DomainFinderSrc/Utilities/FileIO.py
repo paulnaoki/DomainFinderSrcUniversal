@@ -94,6 +94,7 @@ class FileHandler:
                 f.close()
             return True
         except Exception as ex:
+            print(ex, "options:", option)
             raise ex
 
     def check_download_completed(self, fileLocation: str):

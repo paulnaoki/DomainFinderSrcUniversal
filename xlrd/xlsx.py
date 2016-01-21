@@ -8,11 +8,11 @@ from __future__ import print_function, unicode_literals
 DEBUG = 0
 
 import re
-from DomainFinderSrc.xlrd.timemachine import *
-from DomainFinderSrc.xlrd.book import Book, Name
-from DomainFinderSrc.xlrd.biffh import error_text_from_code, XLRDError, XL_CELL_BLANK, XL_CELL_TEXT, XL_CELL_BOOLEAN, XL_CELL_ERROR
-from DomainFinderSrc.xlrd.formatting import is_date_format_string, Format, XF
-from DomainFinderSrc.xlrd.sheet import Sheet
+from xlrd.timemachine import *
+from xlrd.book import Book, Name
+from xlrd.biffh import error_text_from_code, XLRDError, XL_CELL_BLANK, XL_CELL_TEXT, XL_CELL_BOOLEAN, XL_CELL_ERROR
+from xlrd.formatting import is_date_format_string, Format, XF
+from xlrd.sheet import Sheet
 
 DLF = sys.stdout # Default Log File
 
@@ -540,7 +540,7 @@ class X12Sheet(X12General):
         comment_list = root[1]
         assert comment_list.tag == U_SSML12 + 'commentList'
         cell_note_map = self.sheet.cell_note_map
-        from DomainFinderSrc.xlrd.sheet import Note
+        from xlrd.sheet import Note
         text_tag = U_SSML12 + 'text'
         r_tag = U_SSML12 + 'r'
         t_tag = U_SSML12 + 't'

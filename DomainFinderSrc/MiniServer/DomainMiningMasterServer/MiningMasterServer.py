@@ -81,6 +81,26 @@ class MasterRequestHandler(socketserver.StreamRequestHandler):
                     reply.cmd = ServerCommand.Com_ReplyError
                     reply.data = "Remove DB failed"
                 CommandProcessor.send_command(out_buffer, reply)
+            elif command.cmd == ServerCommand.Com_Start_Filter:
+                data = command.data
+                try:
+                    if s.is_alive():
+                        s.stop()
+                        s.join()
+                    if isinstance(data,  FilteringSetupData):  #MatrixFilterControl.FilteringSetupData
+                        self.server.addtional_obj = MiningMasterController(ref=data.ref, accounts=data.accounts,
+                                                                           crawl_matrix=data.crawl_matrix,
+                                                                           filtering_only_mode=True,
+                                                                           filtering_offset=data.offset,
+                                                                           filtering_total=data.total
+                                                                           )
+                        self.server.addtional_obj.start()
+                except Exception as ex:
+                    print(ex)
+                    ErrorLogger.log_error("MasterRequestHandler.send_and_receive()", ex, "cmd = ServerCommand.Com_Start_Filter()")
+                    reply.cmd = ServerCommand.Com_ReplyError
+                    reply.data = "Com_Start_Filter failed"
+                CommandProcessor.send_command(out_buffer, reply)
 
             elif command.cmd == ServerCommand.Com_Setup:  # test this
                 data = command.data
@@ -89,7 +109,8 @@ class MasterRequestHandler(socketserver.StreamRequestHandler):
                         s.stop()
                         s.join()
                     if isinstance(data, SetupData):
-                        self.server.addtional_obj = MiningMasterController(ref=data.ref, cap_slave=data.cap,
+                        self.server.addtional_obj = MiningMasterController(ref=data.ref, accounts=data.accounts,
+                                                                           cap_slave=data.cap,
                                                                            cap_slave_process=data.cap2,
                                                                            cap_concurrent_page=data.cap3,
                                                                            all_job=data.total,
@@ -98,7 +119,9 @@ class MasterRequestHandler(socketserver.StreamRequestHandler):
                                                                            max_page_limit=data.max_page_limit,
                                                                            loopback_database=data.loopback,
                                                                            refresh_rate=data.refresh_rate,
-                                                                           filters=data.db_filter)
+                                                                           filters=data.db_filter,
+                                                                           crawl_matrix=data.crawl_matrix,
+                                                                           )
                         if data.addtional_data is not None and isinstance(data.addtional_data, SlaveOperationData):
                             self.add_slaves(self.server.addtional_obj, data.addtional_data)
                             self.server.addtional_obj.setup_minging_slaves()

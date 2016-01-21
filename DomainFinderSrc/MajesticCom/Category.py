@@ -24,6 +24,7 @@ class MainCategory:
     # VIDEO_GAME_SUB_GAMES = "Video Games Sub Games"
     HOME = "Home"
     ADULT = "Adult"
+    WORLD = "World"
     UNDEFINED = "General"
 
     @staticmethod
@@ -35,7 +36,7 @@ class MainCategory:
                 MainCategory.RECREATION, MainCategory.NEWS, MainCategory.SCIENCE, MainCategory.SHOPPING,
                 MainCategory.HEALTH, MainCategory.REGIONAL, MainCategory.GAMES,
                 # MainCategory.VIDEO_GAME_SUB_GAMES,
-                MainCategory.HOME, MainCategory.ADULT, ]
+                MainCategory.HOME, MainCategory.ADULT, MainCategory.WORLD]
 
 
 class SubCategory(Serializable):
@@ -217,7 +218,7 @@ class CategoryManager:
             else:
                 raise ValueError("parsing category error:" + category)
         if main_cat not in MainCategory.get_all_category():
-            raise ValueError("has to be in main category:" + category)
+            raise ValueError("has to be in main category:" + main_cat)
         sub_cat = sub_cat if len(sub_cat) > 0 else SubCategory.UNDEFINED
         if strict_check and sub_cat not in CategoryManager.get_sub_categories(main_cat):
             raise ValueError("has to be in sub category:" + sub_cat + " with main category:" + main_cat)

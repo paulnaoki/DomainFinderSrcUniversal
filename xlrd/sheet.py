@@ -33,7 +33,7 @@ from array import array
 from struct import calcsize
 
 from DomainFinderSrc.xlrd.biffh import *
-from .timemachine import *
+from xlrd.timemachine import *
 from .formula import dump_formula, decompile_formula, rangename2d, FMLA_TYPE_CELL, FMLA_TYPE_SHARED
 from .formatting import nearest_colour_index, Format
 
@@ -1612,7 +1612,7 @@ class Sheet(BaseObject):
         return xfx
 
     def fake_XF_from_BIFF20_cell_attr(self, cell_attr, style=0):
-        from DomainFinderSrc.xlrd.formatting import XF, XFAlignment, XFBorder, XFBackground, XFProtection
+        from xlrd.formatting import XF, XFAlignment, XFBorder, XFBackground, XFProtection
         xf = XF()
         xf.alignment = XFAlignment()
         xf.alignment.indent_level = 0

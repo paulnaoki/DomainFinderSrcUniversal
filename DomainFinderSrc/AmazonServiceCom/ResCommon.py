@@ -20,11 +20,14 @@ class ServiceUtility:
         if parent is None:
             return ""
         else:
-            child = parent.find("{{{0:s}}}{1:s}".format(namespace, target_tag))
-            if child is None:
+            try:
+                child = parent.find("{{{0:s}}}{1:s}".format(namespace, target_tag))
+                if child is None:
+                    return ""
+                else:
+                    return child.text
+            except:
                 return ""
-            else:
-                return child.text
 
     @staticmethod
     def percent_encode_rfc3986(url: str):

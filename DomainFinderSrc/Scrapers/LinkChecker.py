@@ -16,6 +16,8 @@ from urllib import robotparser
 import shortuuid
 from reppy.cache import RobotsCache
 from reppy.parser import Rules
+from reppy import Utility, parser
+import time
 
 
 class ResponseCode:
@@ -105,20 +107,37 @@ class LinkChecker:
 
     @staticmethod
     def get_robot_agent(root_domain: str, protocol="http") -> Rules:
+        if root_domain.startswith("http"):
+            root_domain = LinkChecker.get_root_domain(root_domain)[4]
+        versions = ["http://", "https://", "http://www.", "https://www."]
         suffix = "/robots.txt"
-        temp_link = protocol + "://" + root_domain
-        robot_link = temp_link + suffix
-        try:
-            status_code, content_type = LinkChecker.get_response(temp_link)
-            if status_code == ResponseCode.LinkOK:
+        current = ""
+        found = False
+        for version in versions:
+            temp_link = version + root_domain + suffix
+            try:
+                status_code, content_type = LinkChecker.get_response(temp_link)
+                if status_code == ResponseCode.LinkOK:
+                    current = temp_link
+                    found = True
+                    break
+                else:
+                    raise ConnectionError
+            except:
+                pass
+        if found:
+            try:
                 robots = RobotsCache()
-                rules = robots.fetch(temp_link)
-                return rules
-            elif root_domain.startswith("www"):
+                req = robots.session.get(current)
+                ttl = max(robots.min_ttl, Utility.get_ttl(req.headers, robots.default_ttl))
+                # And now parse the thing and return it
+                return parser.Rules(current, req.status_code, req.content, time.time() + ttl)
+
+                # rules = robots.fetch(current)
+                # return rules
+            except:
                 return None
-            else:
-                return LinkChecker.get_robot_agent("www." + root_domain, protocol)
-        except:
+        else:
             return None
 
     @staticmethod

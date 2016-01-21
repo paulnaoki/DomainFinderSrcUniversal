@@ -73,6 +73,7 @@ class DBInterface:
             self.cur.executemany(self.insert_query.format(self.encoded_tab, ), need_to_add)
             self.db.commit()
         except Exception as ex:
+            print(ex)
             msg = "add_sites() " + self.tab
             ErrorLogger.log_error("SeedSiteDB", ex, msg)
 
@@ -95,14 +96,18 @@ class DBInterface:
         except sqlite3.OperationalError as ex:
             return True  # so that new data will not add to the db to cause further error
 
+    @staticmethod
+    def get_query_para(**para) -> dict:
+        return {}
+
     def convert_query_para(self, **kwargs) -> str:
         return ""
 
-    def get_next_patch_no_rollover(self, index: int, count: int, **kwargs):
-
+    def get_next_patch_no_rollover(self, index: int, count: int, reverse_read=False,  **kwargs):
+        reverse_read_clause = "DESC " if reverse_read else ""
         try:
-            self.cur.execute(u"SELECT * FROM \'{0:s}\'{1:s} ORDER BY rowid LIMIT {2:d} OFFSET {3:d};".
-                             format(self.encoded_tab, self.convert_query_para(**kwargs), count, index))
+            self.cur.execute(u"SELECT * FROM \'{0:s}\'{1:s} ORDER BY rowid {2:s}LIMIT {3:d} OFFSET {4:d};".
+                             format(self.encoded_tab, self.convert_query_para(**kwargs), reverse_read_clause, count, index))
             results = [self.convert_output(x) for x in self.cur.fetchall()]
             return results
 

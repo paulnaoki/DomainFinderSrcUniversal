@@ -5,10 +5,10 @@ from DomainFinderSrc.MajesticCom import *
 from DomainFinderSrc.SiteConst import *
 from DomainFinderSrc.Scrapers.MatrixFilter import MajesticFilter
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
-from DomainFinderSrc.Utilities import FileIO, Logging
+from DomainFinderSrc.Utilities import FileIO, Logging, FilePath
 from DomainFinderSrc.ComboSites.GoogleMajetic import GoogleMajestic, GoogleCom
 from DomainFinderSrc.MajesticCom.Category import *
-from UnitTest.Accounts import majestic, account
+from UnitTest.Accounts import majestic, majestic_account
 from DomainFinderSrc.MiniServer.DatabaseServer.CategoryDB import CategoryDBManager
 from DomainFinderSrc.MiniServer.DatabaseServer.CategorySiteDB import CategorySeedSiteDB, CategorySiteDBManager
 from DomainFinderSrc.Utilities.Serializable import Serializable
@@ -67,9 +67,12 @@ class MajesticTest(TestCase):
         print("number of data points: ", len(data[0]))
 
     def test_ref_domains(self):
-        data = majestic.get_ref_domains(domain="susodigital.com", is_dev=False)
+        data = majestic.get_ref_domains(domain="ukcriminallawblog.com", max_count=100, is_dev=False, fresh_data=True)
+        counter = 0
         for item in data:
-            print(item)
+            print("counter:", counter, " item:", str(item))
+            counter += 1
+
 
     def testWesternLan(self):
         strs = ["travel log", "something", "中国字", "Агент Mail.Ru", "conférence des communautés homosexuelle"]
@@ -151,10 +154,10 @@ class MajesticTest(TestCase):
 
     def testFilter(self):
         manager = AccountManager()
-        manager.AccountList.append(account)
+        manager.AccountList.append(majestic_account)
         input_param ={"input_queue": queue.Queue(), "output_queue": queue.Queue(), "stop_event": Event()}
         filter = MajesticFilter(manager=manager, **input_param)
-        param = {"Account": account}
+        param = {"Account": majestic_account}
         links = FileIO.FileHandler.read_lines_from_file("/Users/superCat/Desktop/PycharmProjectPortable/test/spam_test1.txt")
         for link in links:
             site = FilteredDomainData(domain=link)
@@ -246,89 +249,163 @@ class MajesticTest(TestCase):
             if isinstance(item, Serializable):
                 print(item.get_serializable(False))
 
-    def testCatagory4(self):
+    def testImportSeeds(self):
         seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
         category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
         db = CategorySeedSiteDB(seed_db_addr)
         basic_manager = CategoryManager()
         category_manager = CategoryDBManager(category_db_addr)
-        seed_manager = CategorySiteDBManager(db)
+        seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=seed_db_addr)
         import csv
-        path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling.csv"
+        path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3 copy.csv"
         counter = 0
-        with open(path, mode='r', newline='') as csv_file:
+        with open(path, mode='r', newline='', encoding='utf-8') as csv_file:
+            # lines = len(csv_file.readlines())
             rd = csv.reader(csv_file, delimiter=',')
             for row in rd:
-                if len(row) == 6:
-                    try:
+                try:
+                    if len(row) == 6:
                         domain, backlink, tf, cf, topic, topical_tf = row
                         if len(topic) > 0:
                             decoded_topic = basic_manager.decode_sub_category(topic, False)
                             data = MajesticBacklinkDataStruct(ref_domain=domain, src_cf=int(cf),
                                                               src_tf=int(tf), src_topic=str(decoded_topic), src_topical_tf=int(topical_tf))
                             seed_manager.append_to_buff(data=data, category=str(decoded_topic))
-                    except Exception as ex:
-                            print(ex)
-                    finally:
-                        counter += 1
-                        print("current loc:", counter, "data:", row)
+                except Exception as ex:
+                        print(ex, "row:", row)
+                finally:
+                    counter += 1
+                    print("current loc:", counter, "data:", row)
         seed_manager.close()
+
+    def test_possibility(self):
+        import random
+        zero_times = 0
+        one_times = 0
+        for i in range(1000):
+            j = random.randint(0, 1)
+            if j == 1:
+                one_times += 1
+            elif j == 0:
+                zero_times += 1
+        print("zero_times:", zero_times, "one_times:", one_times)
+
+    def testGetSeedsFromRefDomains(self):
+        import random
+        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed4.csv"
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB_WithCountry.db"
+        seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=seed_db_addr)  # was seed_db_addr
+        thread_pool_size = 20
+        max_count = 5000
+        seed_manager._max_site_limit = int(thread_pool_size * max_count*0.75)
+
+    def test_list(self):
+        temp_sites = ["abc", "faa", "afa", "afa"]
+        temp_sites = list(set(temp_sites))
+        for item in temp_sites:
+            print(item)
 
     def testGetSeedsFromBacklinks(self):
         import random
-        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed2.csv"
-        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        import time
+        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed5.csv"
+        # seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB_WithCountry_Temp.db"
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+        # logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed4.csv"
+        # seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        save_seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
         category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
+        seed_site_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SiteFromResults.txt"
         db = CategorySeedSiteDB(seed_db_addr)
         basic_manager = CategoryManager()
+        thread_pool_size = 20
+        max_count = 5000
+
         category_manager = CategoryDBManager(category_db_addr)
-        seed_manager = CategorySiteDBManager(db)
+        seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=save_seed_db_addr)  # was seed_db_addr
+        seed_manager._max_site_limit = int(thread_pool_size * max_count*0.75)
+
         counter = 0
+        country_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/SpamFilter/bad_country.txt"
+        bad_countries = [x.upper() for x in FileIO.FileHandler.read_lines_from_file(country_file_path)]
 
-        def backlink_callback_inner(backlink: MajesticBacklinkDataStruct):
-            if len(backlink.src_topic) > 0:
-                decoded_topic = basic_manager.decode_sub_category(backlink.src_topic, False)
-                # print(backlink)
-                Logging.CsvLogger.log_to_file_path(logging_path, [backlink.to_tuple(), ])
-                seed_manager.append_to_buff(data=backlink, category=str(decoded_topic))
+        def backlink_callback_inner(link_data):
 
-        max_count = 4000
+            if isinstance(link_data, MajesticRefDomainStruct):
+                if link_data.country in bad_countries or link_data.tf < 5 or link_data.tf > 95:
+                    link_data = None
+                    pass
+                else:
+                    link_data = MajesticBacklinkDataStruct(ref_domain=link_data.domain, backlink=link_data.domain,
+                                                           src_tf=link_data.tf, src_cf=link_data.cf,
+                                                           src_topic=link_data.src_topic,
+                                                           src_topical_tf=link_data.src_topic_tf,
+                                                           country_code=link_data.country, potential_url=link_data.potential_url)
+
+            if isinstance(link_data, MajesticBacklinkDataStruct):
+                if len(link_data.src_topic) > 1:
+                    decoded_topic = basic_manager.decode_sub_category(link_data.src_topic, False)
+                    # print(backlink)
+                    Logging.CsvLogger.log_to_file_path(logging_path, [link_data.to_tuple(), ])
+                    seed_manager.append_to_buff(data=link_data, category=str(decoded_topic))
+
+
         total_count = 0
-        seed_init_limit = 100
-        seed_depth_limit = 450
-        temp_niches = ["Health/Nutrition", ]
+        seed_init_limit = 200
+        seed_depth_limit = 800
+        temp_niches = []
         niches = []
 
         for niche in temp_niches:  # make valid niche for seeds
-            if niche.endswith("General"):
-                niches.append(niche.rstrip("General"))
-            else:
-                niches.append(niche)
+            # if niche.endswith("General"):
+            #     niches.append(niche.rstrip("General"))
+            # else:
+            niches.append(niche)
 
-        forbidden_list = ["bbc.co.uk", "wikipedia.org", "youtube.com", ".edu", "amazon.co.uk", "facebook.com", "google.com"]
+        forbidden_list = ["bbc.co.uk", "wikipedia.org", "youtube.com", "amazon.co.uk", "facebook.com", "google.com", ".ru", ".cn", ".jp"]
         for niche in niches:
-            decoded_topic = basic_manager.decode_sub_category(niche, True)
+            decoded_topic = basic_manager.decode_sub_category(niche, False)
             print(decoded_topic)
-        minimum_tf = 30
+        minimum_tf = 25
         temp_sites = []
-        target_ca = []
+        target_ca = ["Society/Law", "Society/Politics", "Society/Issues", "Business/Financial Services"]
         sites = []
         parameters = {"TF": minimum_tf}
-        # sites = GoogleCom.get_sites(keyword="Marketing and Advertising", index=0, filter_list=forbidden_list)[10:]
+        key_words = ["Alcohol law", "Banking law", "Antitrust law", "Aviation law", "Corporate law", "Communications law",
+                     "Construction law", "Consumer law", "Drug control law", "Insurance law", "Tax law"]
+        # for item in key_words:
+        #     temp_sites += GoogleCom.get_sites(keyword=item, index=0, filter_list=forbidden_list, blog=True)[0:]
+        #     print("sites count:", len(temp_sites))
+        #     time.sleep(2)
+        # temp_sites = FileHandler.read_lines_from_file(seed_site_file_path)
+        # temp_sites = list(set(temp_sites))
+        print("seeds total:", len(temp_sites))
         categories = db.get_sub_category_tables_name()
         for niche in niches:
             target_ca += [x for x in categories if niche in x]
 
         seed_count = 0
         load_limit = seed_init_limit*4
-        # for ca in target_ca:
-        #     count = db.get_total(ca, **parameters)
-        #     seed_count += count
+
+        def check_ending(domain: str):
+            is_wrong_ending = False
+            for item in forbidden_list:
+                if domain.endswith(item):
+                    is_wrong_ending = True
+                    break
+            return not is_wrong_ending
 
         for ca in target_ca:
-            temp_sites += [x.ref_domain for x in db.get_from_table(ca, 0, load_limit, parameters)]
+            temp_sites += [y for y in filter(check_ending,
+                                             [x.ref_domain for x in db.get_from_table(ca, 0, load_limit, parameters,
+                                                                                      reverse_read=True,
+                                                                                      random_read=True)])]
+
+        db.close()
+
 
         seed_count = len(temp_sites)
+        # seed_init_limit = seed_count  #---------------------------
 
         if seed_count <= seed_init_limit:
             sites = temp_sites
@@ -339,24 +416,28 @@ class MajesticTest(TestCase):
                 site = temp_sites[random.randint(0, seed_count-1)]
                 if site not in sites:
                     sites.append(site)
-
-        GoogleMajestic.get_sites_by_seed_sites(majestic, sites, catagories=niches, iteration=1,
+        # GoogleMajestic.get_sites_by_seed_sites(majestic, sites, catagories=niches, iteration=1,
+        #                                                    count_per_domain=max_count, callback=backlink_callback_inner,
+        #                                                    max_count=seed_depth_limit, tf=minimum_tf)
+        GoogleMajestic.get_sites_by_seed_sites_muti_threads(majestic, sites, catagories=target_ca, iteration=4,
                                                            count_per_domain=max_count, callback=backlink_callback_inner,
-                                                           max_count=seed_depth_limit, tf=minimum_tf)
+                                                           max_count=seed_depth_limit + seed_init_limit,
+                                                           thread_pool_size=thread_pool_size, tf=minimum_tf, get_backlinks=False, bad_country_list=bad_countries)
         seed_manager.close()
         # total_count += len(backlinks)
         # print("job finished, total backlinks:", total_count)
 
     def testPrintSeedDB(self):
-        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
-        log_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SeedLog.csv"
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+        log_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SeedLog3.csv"
         enable_log = True
+        FileHandler.remove_file_if_exist(log_file_path)
         db = CategorySeedSiteDB(seed_db_addr)
-        seed_manager = CategorySiteDBManager(db)
+        # seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=seed_db_addr)
         categories = db.get_sub_category_tables_name()
         total_count = 0
         target_niche = ""
-        parameters = {}
+        parameters = {"TF": 0}
         if enable_log:
             CsvLogger.log_to_file_path(log_file_path, [("parameters", str(parameters)), ])
         # parameters = {"TF": 20}
@@ -371,13 +452,21 @@ class MajesticTest(TestCase):
         if enable_log:
             CsvLogger.log_to_file_path(log_file_path, [("total", str(total_count)), ])
 
+    def testPrintSeedDBSingleNiche(self):
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        parameters = {"TF": 0}
+        db = CategorySeedSiteDB(seed_db_addr)
+        total = db.get_total("Society/Law", **parameters)
+        db.close()
+        print(total)
+
     def testeedExport(self):
         seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/sync/SeedSitesList"
         seed_db = SeedSiteDB("26/10/2015 Marketing CF20", db_addr=seed_db_addr)
 
         categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
         db = CategorySeedSiteDB(categoy_db_addr)
-        seed_manager = CategorySiteDBManager(db)
+        # seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=categoy_db_addr)
         categories = db.get_sub_category_tables_name()
         target_ca = [x for x in categories if "Business/Marketing and Advertising" in x]
         sites = []
@@ -391,7 +480,7 @@ class MajesticTest(TestCase):
                 count = seeds_needed
             count = int(percentage * count)
             if count > 0:
-                temp = db.get_from_table(ca, 0, count, filter_dict=parameters)
+                temp = db.get_from_table(ca, 0, count, random_read=False, filter_dict=parameters)
                 for item in temp:
                     if isinstance(item, MajesticBacklinkDataStruct):
                         sites.append((item.ref_domain, 0))

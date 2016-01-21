@@ -13,6 +13,7 @@ class ServerCommand:
     Com_Setup = "SETUP" # Accept Slave
     Com_Get_Data = "GET-DATA"
     Com_DataBase_Status = "DB-STATUS" #Accept Database
+    Com_DataBase_Stats = "DB-STATS"
     Com_Begin_Mining = "MINE-START"
     Com_Stop_Mining = "MINE-STOP"
     Com_Add_Slave ="SLAVE-ADD"  # add slaves
@@ -23,9 +24,14 @@ class ServerCommand:
     Com_Add_Seed = "DB-ADD-SEED"
     Com_Remove_DB = "DB-RM-DB"  # remove a database
     Com_Get_DB_DATA = "DB-GET-DB-DATA"
+    Com_Add_DB_DATA = "DB-ADD-DB-DATA"
+    Com_Remove_DB_DATA = "DB-RM-DB-DATA"
     Com_Get_Proxes = "GET-PROXY"
     Com_Set_Proxes = "SET-PROXY"
     Com_Clear_Cache = "CLEAR-CACHE"
+    Com_Add_Task = "ADD-TASK"
+    Com_Get_Task = "GET-TASK"
+    Com_Start_Filter = "START-FILTER"
 
 
 class ServerState:
@@ -74,9 +80,18 @@ class SlaveOperationData(Serializable):
         self.slave_addrs = slaves_addrs
 
 
+class CrawlMatrix(Serializable):
+    def __init__(self, tf=0, cf=0, da=0, ref_domains=0, tf_cf_deviation: float=0.0,
+                 en_moz=True, en_archive_count=True, en_archive_check=False, en_majestic=True, en_tf_check=True,  en_spam_check=True):
+        self.tf, self.cf, self.da, self.ref_domains, self.tf_cf_deviation = tf, cf, da, ref_domains, tf_cf_deviation
+        self.en_moz, self.archive_count, self.en_archive_check, self.en_majestic, self.en_tf_check, self.en_spam_check = \
+            en_moz, en_archive_count, en_archive_check, en_majestic, en_tf_check, en_spam_check
+
+
 class SetupData(Serializable):
     def __init__(self, ref: str="", cap: int=0, cap2: int=0, cap3=0, total: int=0, offset: int=0, max_page_level: int=0, max_page_limit: int=0,
-                 loopback=True, refresh_rate=30, company="", company_code="", db_filter: Serializable=None, addtional_data: Serializable=None):
+                 loopback=True, refresh_rate=30, company="", company_code="", db_filter: Serializable=None, accounts=[],
+                 crawl_matrix=CrawlMatrix(), addtional_data: Serializable=None):
         self.ref = ref
         self.cap = cap  # master: number of slves
         self.cap2 = cap2  # master, slave: number of process
@@ -91,8 +106,13 @@ class SetupData(Serializable):
         self.company = company
         self.company_code = company_code
         self.db_filter = db_filter
+        self.accounts = accounts  # a list of SiteAccount
+        self.crawl_matrix = crawl_matrix
         self.addtional_data = addtional_data
 
+class FilteringSetupData(Serializable):
+    def __init__(self, ref="", offset=0, total=0, crawl_matrix=CrawlMatrix(), accounts=[]):
+        self.ref, self.offset, self.total, self.crawl_matrix, self.accounts = ref, offset, total, crawl_matrix, accounts
 
 class SeedSiteFeedback(Serializable):
     def __init__(self, domain: str="", page_count: int=0):
@@ -163,6 +183,12 @@ class ServerStatus(Serializable):
         self.filter_total = filter_total
         self.filter_done = filter_done
 
+    def is_server_down(self) ->bool:
+        if self.cpu_cores == 0 and self.memory < 0.1:
+            return True
+        else:
+            return False
+
     def __str__(self):
         return str(self.__dict__)
 
@@ -179,7 +205,9 @@ class ServerAddress(Serializable):
 class ServerType:
     ty_Host = 1
     ty_MiningSlaveSmall = 2
-    ty_Database = 5
+    ty_Marketplace_Database = 5
+    ty_Seed_Database = 6
+    type_Cpu = 10
 
     @staticmethod
     def to_str(type_int: int):
@@ -187,8 +215,12 @@ class ServerType:
             return "Host"
         elif type_int == ServerType.ty_MiningSlaveSmall:
             return "Miner"
-        elif type_int == ServerType.ty_Database:
-            return "Database"
+        elif type_int == ServerType.ty_Marketplace_Database:
+            return "Market_Database"
+        elif type_int == ServerType.ty_Seed_Database:
+            return "Seed_Database"
+        elif type_int == ServerType.type_Cpu:
+            return "CPU"  # task control, seed and market database
         else:
             return "Unknown"
 
@@ -204,8 +236,16 @@ class Server(Serializable):
 
 
 class CommandStruct(Serializable):
-    def __init__(self, cmd: str="", data: Serializable=None):#, incoming_server=ServerAddress()):
+    def __init__(self, cmd: str="", target: str="",  data: Serializable=None):#, incoming_server=ServerAddress()):
+        """
+        this define how data pass between servers
+        :param cmd: type of ServerCommand
+        :param target: type of ServerType
+        :param data: type of Serilizable
+        :return:
+        """
         self.cmd = cmd
+        self.target = target
         self.data = data
         #self.server = incoming_server
 

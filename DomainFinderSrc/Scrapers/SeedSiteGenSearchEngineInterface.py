@@ -8,8 +8,10 @@ class SeedSiteSettings:
 
 class SeedSiteGeneratorInterface:
     @staticmethod
-    def get_sites(keyword: str, page: int=1, index: int=0, length: int=100,
-                  history=SeedSiteSettings.TIME_NOW, blog=False) -> []:
+    def get_sites(keyword: str, page_number: int=1, result_per_page: int=100,
+                  index: int=0, length: int=100,
+                  source_type="", filter_list=[],
+                  **kwargs) -> []:
         pass
 
     @staticmethod

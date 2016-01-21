@@ -36,6 +36,7 @@ class FileBuffInterface:
         self._output_counter = 0
         self._continue_lock = RLock()
         self._append_lock = RLock()
+        self.reset_event = Event()
         self._continue = True
         self._total_record = 0
         self._update_record_period = 30
@@ -101,6 +102,7 @@ class FileBuffInterface:
             return
         if isinstance(data, FileBuffDefaultState):
             self._total_record = data.all_data
+            # print("self._output_counter value change in recovery_from_power_cut")
             self._output_counter = data.progress
         else:
             pass
@@ -113,6 +115,7 @@ class FileBuffInterface:
         return FileBuffDefaultState(self._output_counter, self._total_record)
 
     def set_progress(self, count: int):
+        # print("self._output_counter value change in set_progress")
         self._output_counter = count
 
     def start_input_output_cycle(self):
@@ -124,22 +127,28 @@ class FileBuffInterface:
     def get_total_record(self):
         return self._total_record
 
-    def reset(self):
-        self._input_buff.clear()
+    def reset(self, clear_input_buff=True):
+        self.reset_event.set()
+        if clear_input_buff:
+            self._input_buff.clear()
+        # print("self._output_counter value change in FilebBufferInterface.reset()")
         self._output_counter = 0
         self._total_record = 0
-        self._continue = False
+        with self._continue_lock:
+            self._continue = False
         if self._input_t.is_alive():
             self._input_t.join()
         if self._output_t.is_alive():
             self._output_t.join()
         if self._power_save_mode and self._power_save_t.is_alive():
             self._power_save_t.join()
-        self._continue = True
+        with self._continue_lock:
+            self._continue = True
         self._input_t = threading.Thread(target=self.input_cycling, name="input_buf_t")
         self._output_t = threading.Thread(target=self.output_cycling, name="output_buf_t")
         if self._power_save_mode:
             self._power_save_t = threading.Thread(target=self.power_save_cycle, name="power_t")
+        self.reset_event.clear()
 
     def set_continue_lock(self, can_contiune=True):
         with self._continue_lock:
@@ -159,10 +168,12 @@ class FileBuffInterface:
                     break
             time.sleep(self._min_outptu_period)
         if next_item is not None:
+            # print("__next__(): return next one:", str(next_item))
             return next_item
         else:
             if self._terminate_callback is not None:
                 self._terminate_callback()
+            # print("FileBufferInterface.__next__(): stop iteration")
             raise StopIteration
 
     def append_to_buffer(self, new_data_list, convert_tuple=True):
@@ -187,6 +198,9 @@ class FileBuffInterface:
     def get_task_done_count(self):
         raise NotImplementedError
 
+    def update_total_in_file(self):
+        raise NotImplementedError
+
     def read(self, file=None) -> []:
         """
         read data from file
@@ -197,8 +211,6 @@ class FileBuffInterface:
     def write(self, data: [], file=None) -> bool:
         raise NotImplementedError
 
-    def update_total_in_file(self):
-        pass
 
     def use_same_connection_to_file(self):
         """
@@ -219,12 +231,18 @@ class FileBuffInterface:
         if self.use_same_connection_to_file():
             file = self.open_file_object()
         while True:
-            if not self.can_continue() or not self._continue:
+            with self._continue_lock:
+                can_contiune = self._continue
+            if not can_contiune:
+                # print("FileBufferInterface input_cycling: base cannot continue break")
+                break
+            if not self.can_continue():
+                # print("FileBufferInterface input_cycling: inherent cannot continue break")
                 break
             #self._append_lock.acquire()
             input_length = len(self._input_buff)
-            if input_length > 500000:
-                input_length = 500000
+            if input_length > 50000:
+                input_length = 50000
             if input_length > 0:
                 #print("want to add more sites ", input_length)
                 input_array = self._input_buff[:input_length]
@@ -254,7 +272,13 @@ class FileBuffInterface:
         if self.use_same_connection_to_file():
             file = self.open_file_object()
         while True:
-            if not self.can_continue()or not self._continue:
+            with self._continue_lock:
+                can_contiune = self._continue
+            if not can_contiune:
+                # print("FileBufferInterface output_cycling: base cannot continue break")
+                break
+            if not self.can_continue():
+                # print("FileBufferInterface output_cycling: inherent cannot continue break")
                 break
             #current_time = time.time()
             progress = self.get_task_done_count()
@@ -264,12 +288,14 @@ class FileBuffInterface:
             #     print("FileBufferInterface in datasource total record is:", self._total_record, "progress is:", progress)
             #remaining = len(self.output_queue)
             gap = self._output_counter - progress
-
+            # print("gap is:", gap, " output_counter is:", self._output_counter, " progress is:", progress, " total record is:", self._total_record, " file_name:", self._file_name)
             if gap < self._output_buff_size/2 and self._total_record > self._output_counter:
+                # print("going to read more.")
                 stored_item = self.read(file=file)
                 if len(stored_item) > 0:
                     for item in stored_item:
                         self._output_queue.append(self.format_output(item))
+                    # print("self._output_counter value change in output_cycling")
                     self._output_counter += len(stored_item)
                 elif self.use_same_connection_to_file():  # the data selected in previous connection has been depleted, so re-open the file so that it can read again
                     self.close_file_object(file)
@@ -279,7 +305,7 @@ class FileBuffInterface:
                 if current_time - ref_time > self._update_record_period:
                     ref_time = current_time
                     self._total_record = self.update_total_in_file()
-                    print("FileBufferInterface in datasource", self._file_name, " total record is:", self._total_record, "progress is:", progress)
+                    # print("FileBufferInterface in datasource", self._file_name, " total record is:", self._total_record, "progress is:", progress, " waiting..")
             time.sleep(1)
         if file is not None:
             self.close_file_object(file)
@@ -287,7 +313,13 @@ class FileBuffInterface:
     def power_save_cycle(self):
         last_save = time.time()
         while True:
-            if not self.can_continue() or not self._continue:
+            with self._continue_lock:
+                can_contiune = self._continue
+            if not can_contiune:
+                # print("FileBufferInterface power_save_cycle: base cannot continue break")
+                break
+            if not self.can_continue():
+                # print("FileBufferInterface power_save_cycle: inherent cannot continue break")
                 break
             current_time = time.time()
             if current_time - last_save >= self._power_save_period:
@@ -296,15 +328,20 @@ class FileBuffInterface:
             time.sleep(1)
 
     def terminate(self):
-        self._continue = False
-        print("set to terminate in file buffer:", self._file_name, "index:", self._output_counter, "total:", self._total_record)
-        #print("continue lock is disabled")
+        # self.set_continue_lock(False)
+        # print("FileBufferInterface set to terminate in file buffer:", self._file_name, "index:", self._output_counter, "total:", self._total_record)
+        with self._continue_lock:
+            self._continue = False
+        # print("continue lock is disabled")
         if self._input_t.is_alive():
             self._input_t.join()
-        #print("input cycle stopped")
+        # print("input cycle stopped")
         if self._output_t.is_alive():
             self._output_t.join()
-        #print("output cycle stopped")
+        # print("output cycle stopped")
         if self._power_save_mode and self._power_save_t.is_alive():
             self._power_save_t.join()
-        #print("power save cycle stopped")
+        # print("power save cycle stopped")
+
+
+

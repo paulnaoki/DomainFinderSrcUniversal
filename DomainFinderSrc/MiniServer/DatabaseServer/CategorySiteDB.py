@@ -77,14 +77,17 @@ class CategorySiteDBInterface:
         finally:
             return count
 
-    def get_from_table(self, category: str, index: int, length: int, filter_dict: dict=None, reverse_read=True) -> []:
+    def get_from_table(self, category: str, index: int, length: int, filter_dict: dict=None, reverse_read=True,
+                       random_read=True) -> []:
         output = []
         reverse_read_clause = "DESC " if reverse_read else ""
+        random_read_clause = "RANDOM()" if random_read else "rowid"
         try:
             category = StrUtility.make_valid_table_name(category)
             self.cur.execute(u"SELECT * FROM \'{0:s}\' {1:s} "
-                             u"ORDER BY rowid {2:s}LIMIT {3:d} OFFSET {4:d};"
-                             .format(category, CategorySiteDBInterface.convert_filter(filter_dict), reverse_read_clause,  length, index))
+                             u"ORDER BY {2:s} {3:s}LIMIT {4:d} OFFSET {5:d};"
+                             .format(category, CategorySiteDBInterface.convert_filter(filter_dict),
+                                     random_read_clause, reverse_read_clause, length, index))
             output = [self.convert_output(x) for x in self.cur.fetchall()]
         except Exception as ex:
             print(ex)
@@ -95,20 +98,29 @@ class CategorySiteDBInterface:
         self.db.close()
 
 
+class SeedDBRequest(Serializable):
+    def __init__(self, niche="", random_read=True, reverse_read=True, data_len=0, tf=0, cf=0):
+        self.niche = niche
+        self.random_read = random_read
+        self.reverse_read = reverse_read
+        self.data_len = data_len
+        self.tf, self.cf = tf, cf
+
+
 class CategorySeedSiteDB(CategorySiteDBInterface):
 
     def __init__(self, db_path: str):
         creation_query = u"CREATE TABLE IF NOT EXISTS \'{0:s}\'" \
-                         u"(DOMAIN TEXT, TF INTEGER, CF INTEGER, TROPICAL_TF INTEGER, PRIMARY KEY(DOMAIN));"
-        insert_query = u"INSERT OR IGNORE INTO \'{0:s}\' (DOMAIN, TF, CF, TROPICAL_TF) VALUES (?, ?, ?, ?);"
+                         u"(DOMAIN TEXT, TF INTEGER, CF INTEGER, TROPICAL_TF INTEGER, COUNTRY TEXT, PO_URL INTEGER, PRIMARY KEY(DOMAIN));"
+        insert_query = u"INSERT OR REPLACE INTO \'{0:s}\' (DOMAIN, TF, CF, TROPICAL_TF, COUNTRY, PO_URL) VALUES (?, ?, ?, ?, ?, ?);"
         #retrieve_query = u"SELECT DOMAIN, TF, CF, TROPICAL_TF FROM "
         CategorySiteDBInterface.__init__(self, db_path=db_path, creation_query=creation_query, insert_query=insert_query)
 
     def convert_input(self, obj):
-        if isinstance(obj, tuple) and len(obj) == 4:
+        if isinstance(obj, tuple) and len(obj) == 6:
             return obj
         elif isinstance(obj, MajesticBacklinkDataStruct):
-            return obj.ref_domain, obj.src_tf, obj.src_cf, obj.src_topic_tf
+            return obj.ref_domain, obj.src_tf, obj.src_cf, obj.src_topic_tf, obj.country_code, obj.potential_url
         else:
             raise TypeError("type of the obj is wrong.")
 
@@ -116,13 +128,19 @@ class CategorySeedSiteDB(CategorySiteDBInterface):
         if isinstance(obj, tuple) and len(obj) == 4:
             domain, tf, cf, topic_tf = obj
             return MajesticBacklinkDataStruct(ref_domain=domain, src_tf=tf, src_cf=cf, src_topical_tf=topic_tf)
+        elif isinstance(obj, tuple) and len(obj) == 6:
+            domain, tf, cf, topic_tf, country, potiental_url = obj
+            return MajesticBacklinkDataStruct(ref_domain=domain, src_tf=tf, src_cf=cf, src_topical_tf=topic_tf, country_code=country, potential_url=potiental_url)
+        else:
+            raise TypeError("type of the obj is wrong.")
 
 
 class CategorySiteDBManager:
-    def __init__(self, db: CategorySiteDBInterface):
-        assert db is not None, "db is None."
-        self.db = db
-        self._max_site_limit = 2000
+    def __init__(self, db_class, **db_para):
+        assert db_class is not None, "db_class is None."
+        self._db_class = db_class
+        self._db_para = db_para
+        self._max_site_limit = 5000
         self._site_counter = 0
         self._temp_buff = []
         self._db_write_lock = threading.RLock()
@@ -143,9 +161,13 @@ class CategorySiteDBManager:
 
     def _save_to_db_and_reset(self):
         with self._db_write_lock:
-            for item in self._temp_buff:
-                self.db.save_to_table(item.sub_category_name, item.data_list)
-            self._temp_buff.clear()
+            db = self._db_class(**self._db_para)
+            data_len = len(self._temp_buff)
+            if isinstance(db, CategorySiteDBInterface):
+                for item in self._temp_buff:
+                    db.save_to_table(item.sub_category_name, item.data_list)
+                db.close()
+            self._temp_buff = self._temp_buff[data_len-1:]
             self._site_counter = 0
 
     def append_to_buff(self, data, category: str):
@@ -160,6 +182,5 @@ class CategorySiteDBManager:
     def close(self):
         try:
             self._save_to_db_and_reset()
-            self.db.close()
         except Exception as ex:
             pass

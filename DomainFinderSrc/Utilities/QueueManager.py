@@ -53,7 +53,7 @@ def get_queue_client(parameters: tuple, method: str, max_retries=60) -> (QueueMa
             print("wait for queue...")
             count += 1
             time.sleep(1)
-    if result_queue == None:
+    if result_queue is None:
         print("getting queue failed.")
     else:
         print("queue acquired.", method)

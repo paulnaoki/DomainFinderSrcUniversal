@@ -14,8 +14,13 @@ class ProxyStruct:
         self.psd = psd
 
     def __str__(self):
-        return self.addr + " " + str(self.port)
+        if len(self.user_name) > 0:
+            return ":".join([self.addr, str(self.port), self.user_name, self.psd])
+        else:
+            return ":".join([self.addr, str(self.port)])
 
+    def str_no_auth(self):
+        return ":".join([self.addr, str(self.port)])
 
 class ProxyManager:
     def __init__(self):

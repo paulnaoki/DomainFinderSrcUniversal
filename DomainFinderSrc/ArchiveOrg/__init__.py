@@ -4,6 +4,7 @@ import bs4
 from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 from DomainFinderSrc.Utilities.Serializable import Serializable
 from urllib import parse
+from datetime import datetime, date
 
 #archive_link_pattern = re.compile("(\/web\/.+)(http.+\/.+\.[a-z]{0,5})")
 archive_link_pattern = re.compile(u'(\/web[^\'"\(\)]*)\/(http[^\'"\(\)]*)')
@@ -14,6 +15,12 @@ class ArchiveStruct(Serializable):
         self.link = link
         self.date_stamp = date_stamp
         self.size = size
+
+    def get_datestamp_date(self) -> datetime:
+        return datetime.strptime(self.date_stamp, '%Y%m%d%H%M%S')
+
+    def get_datestamp_unix_time(self) -> int:
+        return int(self.get_datestamp_date().timestamp())
 
     def __str__(self):
         return "link: " + self.link + " time_stamp: " + self.date_stamp + " size: " + str(self.size)

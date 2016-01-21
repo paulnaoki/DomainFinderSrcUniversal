@@ -12,9 +12,9 @@ from DomainFinderSrc.xlrd.biffh import *
 unpack = struct.unpack
 import sys
 import time
-from DomainFinderSrc.xlrd import sheet
-from . import compdoc
-from DomainFinderSrc.xlrd.formula import *
+from xlrd import sheet
+from xlrd import compdoc
+from xlrd.formula import *
 from . import formatting
 # print >> sys.stderr, "...importing encodings"
 if sys.version.startswith("IronPython"):

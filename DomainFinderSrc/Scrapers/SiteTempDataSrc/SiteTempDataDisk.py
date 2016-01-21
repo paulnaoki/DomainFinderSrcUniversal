@@ -241,7 +241,7 @@ class SiteTempDataDisk(SiteTempDataSrcInterface):
         counter = 0
         while True:
             if not self.can_continue():
-                print("data source is set not to continue!")
+                # print("data source is set not to continue!")
                 raise StopIteration
 
             item = None

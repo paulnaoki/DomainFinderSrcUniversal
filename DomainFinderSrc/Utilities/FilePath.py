@@ -98,6 +98,14 @@ def get_spam_filter_anchors_file_path():
         return '/usr/local/DomainFinder/SpamFilter/' + anchor_file
 
 
+def get_spam_filter_white_list_file_path():
+    white_list_file = "keyword_white_list.txt"
+    if MachineInfo.get_machine_type() == MachineType.Windows:
+        return 'D:/SQLiteDB/SpamFilter/' + white_list_file
+    else:
+        return '/usr/local/DomainFinder/SpamFilter/' + white_list_file
+
+
 def get_spam_filter_bad_country_path():
     country_file = "bad_country.txt"
     if MachineInfo.get_machine_type() == MachineType.Windows:

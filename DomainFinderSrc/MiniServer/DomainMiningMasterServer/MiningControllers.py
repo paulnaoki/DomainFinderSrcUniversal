@@ -1,8 +1,9 @@
-from multiprocessing import Queue, Event
-import multiprocessing
+from multiprocessing import Queue
+from threading import RLock
+
 from DomainFinderSrc.MiniServer.Common.SocketCommands import *
-from DomainFinderSrc.MiniServer.Common.StreamSocket import StreamSocket
 from DomainFinderSrc.MiniServer.Common.DBInterface import *
+from DomainFinderSrc.MiniServer.DomainMiningSlaveServer.MiningSlaveController import MiningController
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import ScrapeDomainData
 from DomainFinderSrc.MiniServer.Common.MiningTCPServer import MiningTCPServer
 from DomainFinderSrc.UserAccountSettings.UserAccountDB import *
@@ -10,7 +11,6 @@ from DomainFinderSrc.Scrapers.MatrixFilterControl import FilterController, _Filt
 from DomainFinderSrc.Utilities.FilePath import *
 from DomainFinderSrc.Utilities.MemoryControlProcess import MemoryControlPs
 from DomainFinderSrc.Scrapers.LinkChecker import ResponseCode
-from threading import RLock
 
 
 def filtering_process(*args, **kwargs):
@@ -18,108 +18,11 @@ def filtering_process(*args, **kwargs):
     filter_controller.begin_filtering()
 
 
-class MiningController(threading.Thread):
-    def __init__(self, target_server: Server, cmd: str=ServerCommand.Com_Start,
-                 in_data: Serializable=None, out_data: []=None):
-        threading.Thread.__init__(self)
-        self.server = target_server
-        self.cmd = cmd
-        self.in_data = in_data
-        self.out_data = out_data
-        self.sock = StreamSocket()
-        self.processor = CommandProcessor(self.sock.rfile, self.sock.wfile)
-
-    def is_connection_ok(self):
-        try:
-            s = self.sock.get_connection()
-            if isinstance(self.server.address, dict):
-                self.server.address = Serializable.get_deserialized(self.server.address)
-            s.connect((self.server.address.address, self.server.address.port))
-            return True
-        except Exception as e:
-            print(e)
-            return False
-
-    def get_status(self):
-        status_cmd = CommandStruct(cmd=ServerCommand.Com_Status)
-        response = self.processor.check_response_ex(status_cmd)
-        response_data = response[1].data
-        if isinstance(response_data, dict):
-            response_data = Serializable.get_deserialized(response_data)
-        if not response[0]:
-            raise ValueError("get status failed")
-        elif response_data is not None and isinstance(response_data, ServerStatus):
-            if isinstance(self.out_data, type([])):
-                self.out_data.append(response_data)
-            self.server.status = response_data
-
-    def send_data(self):
-        data_cmd = CommandStruct(cmd=ServerCommand.Com_Data, data=self.in_data)
-        response = self.processor.check_response_ex(data_cmd)
-        if not response[0]:
-            raise ValueError("send data failed")
-
-    def get_data(self):
-        get_data_cmd = CommandStruct(cmd=ServerCommand.Com_Get_Data)
-        response = self.processor.check_response_ex(get_data_cmd)
-        outdata = response[1].data
-        if not response[0]:
-            raise ValueError("get data failed")
-        else:
-            if isinstance(self.out_data, type([])):
-                self.out_data.append(outdata)
-
-    def stop_slave(self):
-        stop_mining_cmd = CommandStruct(cmd=ServerCommand.Com_Stop_Mining)
-        response = self.processor.check_response_ex(stop_mining_cmd)
-        if not response[0]:
-            raise ValueError("stop slave failed")
-
-    def setup_slave(self):
-        setup_cmd = CommandStruct(cmd=ServerCommand.Com_Setup, data=self.in_data)
-        response = self.processor.check_response_ex(setup_cmd)
-        if not response[0]:
-            raise ValueError("send data failed")
-
-    def clear_cache(self):
-        stop_mining_cmd = CommandStruct(cmd=ServerCommand.Com_Clear_Cache)
-        response = self.processor.check_response_ex(stop_mining_cmd)
-        if not response[0]:
-            raise ValueError("clear cache failed")
-
-    def run(self):
-        try:
-            start_cmd = CommandStruct(ServerCommand.Com_Start)
-            stop_cmd = CommandStruct(ServerCommand.Com_Stop)
-            if self.is_connection_ok() and self.processor.check_response_ex(start_cmd)[0]:
-                if self.cmd == ServerCommand.Com_Status:
-                    self.get_status()
-                elif self.cmd == ServerCommand.Com_Data:
-                    self.send_data()
-                elif self.cmd == ServerCommand.Com_Get_Data:
-                    self.get_data()
-                elif self.cmd == ServerCommand.Com_Stop_Mining:
-                    self.stop_slave()
-                elif self.cmd == ServerCommand.Com_Setup:
-                    self.setup_slave()
-                elif self.cmd == ServerCommand.Com_Clear_Cache:
-                    self.clear_cache()
-                else:
-                    pass
-            try:  # the last call may have exception due to network connection problem
-                self.processor.check_response_ex(stop_cmd)
-            except:
-                pass
-
-        except Exception as ex:
-            print(ex)
-            pass
-
-
 class MiningMasterController(threading.Thread):
 
-    def __init__(self, ref="", cap_slave=0, cap_slave_process=1, cap_concurrent_page=1, all_job=0, offset = 0, max_page_level=100, max_page_limit=1000,
-                 loopback_database=True, refresh_rate=10, min_page_count=0, filters=DBFilterCollection()):
+    def __init__(self, accounts: list=[], ref="", cap_slave=0, cap_slave_process=1, cap_concurrent_page=1, all_job=0, offset = 0, max_page_level=100, max_page_limit=1000,
+                 loopback_database=False, refresh_rate=10, min_page_count=0, filters=DBFilterCollection(), crawl_matrix=CrawlMatrix(),
+                 filtering_only_mode=False, filtering_offset=0, filtering_total=0):
         """
         init a master controller
         :param ref: dataBase Table reference
@@ -127,6 +30,18 @@ class MiningMasterController(threading.Thread):
         :param all_job:
         :return:
         """
+        print("MiningMasterController.__init__")
+        print("setup data:")
+        if isinstance(accounts, list):
+            print("accounts: ")
+            for item in accounts:
+                print(item)
+        print("ref:", ref)
+        print("cap_slave:", cap_slave)
+        print("cap_slave_process:", cap_slave_process)
+        print("cap_concurrent_page:", cap_concurrent_page)
+        if crawl_matrix is not None:
+            print("crawl matrix:", crawl_matrix.__dict__)
         threading.Thread.__init__(self)
         self.state = ServerState.State_Init
         self.ref = ref  # database
@@ -144,7 +59,7 @@ class MiningMasterController(threading.Thread):
         self.max_page_limit = max_page_limit
         self.start_time = time.time()
         self.end_time = time.time()
-        self.loopback_database = loopback_database
+        self.loopback_database = False
         self.refresh_rate = refresh_rate
         self.in_progress = False
         self.min_page_count = min_page_count  # only crawl sites with page greater than this number
@@ -152,6 +67,9 @@ class MiningMasterController(threading.Thread):
         self.db_seed = None
         if filters is None:
             self.db_filters = DBFilterCollection()
+            self.db_filters.external_filter.update_interval = 30
+            self.db_filters.filtered_result.update_interval = 30
+            self.db_filters.seed_filter.update_interval = 1200
         else:
             self.db_filters = filters
         self.filter_shadow = filters.copy_attrs()
@@ -172,8 +90,14 @@ class MiningMasterController(threading.Thread):
         self._filter_input_queue = Queue()
         self._filter_output_queue = Queue()
         self.filter_process = None
-        self._filter_matrix = FilteredDomainData(tf=15, cf=15, da=15, ref_domains=10, tf_cf_deviation=0.80)
-        self._majestic_filter_on = True
+        if isinstance(crawl_matrix, CrawlMatrix) and crawl_matrix.tf == 0:
+            self._filter_matrix = CrawlMatrix(tf=15, cf=15, da=15, ref_domains=10, tf_cf_deviation=0.80)
+        else:
+            self._filter_matrix = crawl_matrix
+        self._accounts = accounts
+        self._filtering_only = filtering_only_mode
+        self._filtering_offset = filtering_offset
+        self._filtering_total = filtering_total
 
     def update_db_stats(self, force_update=False):
         print("update db stats, do not interrupt!")
@@ -343,7 +267,7 @@ class MiningMasterController(threading.Thread):
                 for thread in threads:
                     thread.start()
                 for thread in threads:
-                    thread.join()
+                    thread.join(30)
                 threads.clear()
 
     def get_db_seed(self):
@@ -403,10 +327,11 @@ class MiningMasterController(threading.Thread):
             for thread in threads:
                 thread.start()
             for thread in threads:
-                thread.join()
+                thread.join(30)
             threads.clear()
 
     def setup_minging_slaves(self): # salve should restart based on this new settings
+        print("setup_minging_slaves....")
         threads = []
         for slave in self.slaves:
             if isinstance(slave, Server):
@@ -419,10 +344,11 @@ class MiningMasterController(threading.Thread):
             for thread in threads:
                 thread.start()
             for thread in threads:
-                thread.join()
+                thread.join(30)
             threads.clear()
+        print("setup_minging_slaves completed")
 
-    def check_slaves_status(self):
+    def check_slaves_status(self, timeout=15):
         threads = []
         for slave in self.slaves:
             if isinstance(slave, Server):
@@ -431,7 +357,7 @@ class MiningMasterController(threading.Thread):
             for thread in threads:
                 thread.start()
             for thread in threads:
-                thread.join()
+                thread.join(timeout)
             threads.clear()
         total_done = 0  # update number of job done, and job wait
         wait = 0
@@ -470,11 +396,11 @@ class MiningMasterController(threading.Thread):
             for thread in threads:
                 thread.start()
             for thread in threads:
-                thread.join()
+                thread.join(30)
             threads.clear()
             if len(result) > 0:
                 for item in result:
-                    if len(item) > 0 and hasattr(item[0], "data"):  # data is the attribute of MiningList
+                    if isinstance(item, list) and len(item) > 0 and hasattr(item[0], "data"):  # data is the attribute of MiningList
                         data = getattr(item[0], "data")
                         resultList += data
         return resultList
@@ -487,6 +413,7 @@ class MiningMasterController(threading.Thread):
             return False
 
     def add_slaves(self, slaves: []):
+        print("adding slave...")
         if slaves is not None:
             for slave in slaves:
                 if isinstance(slave, ServerAddress):
@@ -497,6 +424,7 @@ class MiningMasterController(threading.Thread):
                     ser = Server(server_type=ServerType.ty_MiningSlaveSmall, address=slave)
                     self.slaves.append(ser)
                 elif isinstance(slave, str):
+                    print("adding slave:", slave)
                     temp = slave
                     if slave == "localhost":
                         temp = "127.0.0.1"
@@ -504,6 +432,7 @@ class MiningMasterController(threading.Thread):
                         continue
                     ser = Server(server_type=ServerType.ty_MiningSlaveSmall, address=ServerAddress(temp, MiningTCPServer.DefaultListenPort))
                     self.slaves.append(ser)
+        print("adding slave finished.")
 
     def remove_slaves(self, slaves: []):
         if slaves is not None:
@@ -520,6 +449,61 @@ class MiningMasterController(threading.Thread):
         return self.slaves
 
     def allocate_task(self):
+
+        try:
+            threads = []
+            with self._seed_db_lock:
+                db_seed = SeedSiteDB(offset=self.offset, table=self.ref, db_filter=self.db_filters.seed_filter)
+                for slave in self.slaves:
+                    if isinstance(slave, Server) and slave.status is not None:
+                        if isinstance(slave.status, dict):
+                            print("in allocate_task, data type is invalid, the following data was received, need to redo")
+                            print(slave.status)
+                            slave.status = Serializable.get_deserialized(slave.status)
+                            #raise ValueError("slave status is not valid data type")
+                        if slave.status.is_server_down():
+                            print("server is down, continue..")
+                            continue
+                        if slave.status.all_job - slave.status.done_job <= slave.status.cap_process * 4:
+                            job_temp = int(slave.status.cap_process)  # give half an 1/4 hour worth of data
+                            if job_temp < 5:  # give minimum of 5 jobs
+                                job_temp = 5
+                            if not self.loopback_database and job_temp + self.job_allocated > self.job_all:
+                                job_temp = self.job_all - self.job_allocated
+                            sites = db_seed.get_next_patch(count=job_temp, rollover=self.loopback_database)
+                            print("allocate task:", len(sites))
+                            self.job_allocated += len(sites)
+                            ref = db_seed.tab
+                            mlist = MiningList(ref, sites)
+                            number_sites = len(sites)
+                            if number_sites > 0:
+                                # try:
+                                #     CsvLogger.log_to_file(slave.address.address, [(link,) for link in sites],
+                                #                           dir_path=get_task_backup_dir())
+                                # except:
+                                #     pass
+                                # self.offset += number_sites
+
+                                t = MiningController(slave, cmd=ServerCommand.Com_Data, in_data=mlist)
+                                try:
+                                    t.start()
+                                    t.join(30)
+                                    self.offset += number_sites
+                                except Exception as inner_ex:
+                                    print(inner_ex)
+                            else:
+                                return
+                db_seed.close()
+            # if len(threads) > 0:
+            #     for thread in threads:
+            #         thread.start()
+            #     for thread in threads:
+            #         thread.join()
+            # threads.clear()
+        except Exception as ex:
+            ErrorLogger.log_error("MiningMasterController.allocate_task()", ex, self.ref)
+
+    def allocate_task_v1(self):
         try:
             threads = []
             with self._seed_db_lock:
@@ -559,7 +543,7 @@ class MiningMasterController(threading.Thread):
                 for thread in threads:
                     thread.start()
                 for thread in threads:
-                    thread.join()
+                    thread.join(30)
             threads.clear()
         except Exception as ex:
             ErrorLogger.log_error("MiningMasterController.allocate_task()", ex, self.ref)
@@ -651,16 +635,22 @@ class MiningMasterController(threading.Thread):
 
     def _filtering_process_wrapper(self):
         self.filter_process = MemoryControlPs(func=filtering_process,
-                                         func_kwargs=FilterController.get_input_parameters("filtering.db", get_recovery_dir_path(), self._filter_input_queue,
-                                                                                           self._filter_output_queue, self._stop_event,
+                                         func_kwargs=FilterController.get_input_parameters("filtering.db", get_recovery_dir_path(),
+                                                                                           self._filter_input_queue,
+                                                                                           self._filter_output_queue,
+                                                                                           self._stop_event,
                                                                                            self._filter_matrix,
-                                                                                           self._majestic_filter_on),
+
+                                                                                           self._accounts,
+                                                                                           self._filtering_only,
+                                                                                           self._filtering_offset,
+                                                                                           self._filtering_total),
                                          external_stop_event=self._stop_event)
         self.filter_process.start()
 
     def run(self):  # this is the nornal routine, should setup slaves before doing this
         filter_t = threading.Thread(target=self._filtering_process_wrapper)
-        if len(self.slaves) > 0:
+        if len(self.slaves) > 0 or self._filtering_only:
             filter_t.start()
 
         while not self._stop_event.is_set():
@@ -668,17 +658,21 @@ class MiningMasterController(threading.Thread):
             print("check status")
             self.check_slaves_status()
             #time.sleep(1)
-            if not self.stop_Mining and len(self.slaves) > 0:
+            if not self.stop_Mining and (len(self.slaves) > 0 or self._filtering_only):
                 self.state = ServerState.State_Active
-                print("allocate task")
-                self.allocate_task()
-                #time.sleep(1)
-                print("get and process results")
-                result = self.get_slaves_result()
-                self.process_result(result)
-                result.clear()
+                if not self._filtering_only:
+                    print("allocate task")
+                    self.allocate_task()
+                    #time.sleep(1)
+                    print("get and process results")
+                    result = self.get_slaves_result()
+                    self.process_result(result)
+                    result.clear()
                 self.process_filtering_output_results() # get filtered result into Filtered DB
                 if (self.loopback_database or self.job_done < self.job_all) and len(self.slaves) > 0:
+                    self.end_time = time.time()
+                    self.in_progress = True
+                elif self._filtering_only:
                     self.end_time = time.time()
                     self.in_progress = True
                 else:
@@ -688,6 +682,7 @@ class MiningMasterController(threading.Thread):
             print("update db finished")
             if self._stop_event.is_set():
                 break
+
             time.sleep(15)
         print("should finish filtering process!")
         if filter_t.is_alive():

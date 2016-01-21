@@ -72,15 +72,24 @@ class ExternalTempDataDiskBuffer(FileBuffInterface):
 
     def clear_cache(self):
         try:
+            print("ExternalTempDataDiskBuffer going to terminate...")
             self.terminate()
             # restart
-            self.reset()
+            print("ExternalTempDataDiskBuffer going to reset...")
+            # self.reset()
+            # print("ExternalTempDataDiskBuffer going to force clear...")
             TempDBInterface.force_clear(self._file_name, self._file_dir)
+            print("ExternalTempDataDiskBuffer going to remove power_save_db...")
             self.remove_power_save_db()
             #self.start_input_output_cycle()
             print("clear cache completed: "+self._file_name)
+
+            print("ExternalTempDataDiskBuffer going to reset...")
+            self.reset(clear_input_buff=False)
         except Exception as ex:
-            ErrorLogger.log_error("ExternalTempDataDiskBuffer.clear_cache_and_restart()", ex, self._file_name)
+            print("ExternalTempDataDiskBuffer error in clear cache: "+self._file_name)
+            print(ex)
+            ErrorLogger.log_error("ExternalTempDataDiskBuffer.clear_cache_and_restart() ", ex, self._file_name)
 
     def get_db(self):
         temp = SiteTempExternalDatabase(self._file_name, self._file_dir)
@@ -124,7 +133,11 @@ class ExternalTempDataDiskBuffer(FileBuffInterface):
         return FileBuffDefaultState(self._worker.get_external_count_finished(), self._total_record)
 
     def can_continue(self):
-        return not self.stop_event.is_set()
+        return FileBuffInterface.can_continue(self)
+
+    # def can_continue(self):
+    #     # super_class_continue = FileBuffInterface.can_continue(self)
+    #     return not self.stop_event.is_set() #or super_class_continue
 
     def get_task_done_count(self):
         return self._worker.get_external_count_finished()
@@ -184,7 +197,7 @@ class ExternalTempDataDiskBuffer(FileBuffInterface):
 
                 if self._need_to_vaccum.is_set():
                     self._get_lock.acquire()
-                    while self._is_reading.is_set() and self.can_continue():
+                    while self._is_reading.is_set() and self.can_continue() and not self.stop_event.is_set():
                         time.sleep(0.1)
                     tempdb.enter_exclusive_mode()
                     is_exclusive_mode = True
@@ -193,7 +206,7 @@ class ExternalTempDataDiskBuffer(FileBuffInterface):
                     if is_exclusive_mode:
                         PrintLogger.print("need to vacuum now!")
                         tempdb.vaccum_db()
-                        while self.can_continue() and not tempdb.is_vaccum_finished():
+                        while self.can_continue() and not tempdb.is_vaccum_finished() and not self.stop_event.is_set():
                             time.sleep(0.1)
                     else:
                         if self._input_convert_tuple: #DataStruct.ScrapeDomainData

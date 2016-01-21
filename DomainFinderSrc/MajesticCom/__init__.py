@@ -3,7 +3,7 @@ import requests
 from DomainFinderSrc.MajesticCom.DataStruct import MajesticComStruct, MajesticRefDomainStruct, \
     MajesticBacklinkDataStruct
 from DomainFinderSrc.SiteConst import SiteAccount
-
+from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 
 class MajesticConst:
     Live_endpoint = "http://api.majestic.com/api/json?"
@@ -12,6 +12,8 @@ class MajesticConst:
     cmd_get_ref_domains = "GetRefDomains"   # ref domains info
     cmd_get_anchor_text = "GetAnchorText"  # anchor text and no follow backlinks count for each anchor text
     cmd_get_backlinks = "GetBackLinkData"
+
+# country code source: http://dev.maxmind.com/geoip/legacy/codes/iso3166/
 
 
 class MajesticCom:
@@ -26,6 +28,31 @@ class MajesticCom:
         else:
             request_url = MajesticConst.Live_endpoint + para_encoded
         return requests.get(request_url, timeout=timeout).json()
+
+    @staticmethod
+    def _get_json_data_v0(parameters: dict, is_dev=True, timeout=30, max_connection=10):
+        from urllib.request import urlopen
+        import simplejson
+        para_encoded = urllib.parse.urlencode(parameters)
+        if is_dev:
+            request_url = MajesticConst.Deve_endpoint + para_encoded
+        else:
+            request_url = MajesticConst.Live_endpoint + para_encoded
+        result = None
+        # if max_connection > 0:
+        #     LinkChecker.max_http_connection = max_connection
+        #     LinkChecker.max_pool_size = max_connection
+        # s = LinkChecker.get_common_request_session()
+        data = ""
+        try:
+            response = urlopen(request_url)
+            # data = str(response.read().decode("utf-8"))
+            result = simplejson.loads(response.read())
+            # result = json.loads(data)
+        except Exception as ex:
+            print(ex, " request:", request_url, " result:", result)
+        finally:
+            return result
 
     def get_backlinks(self, domain: str, max_count=10, topic="", is_dev=True, fresh_data=False) -> []:
         """
@@ -94,7 +121,7 @@ class MajesticCom:
         else:
             raise ValueError("get_backlinks(): data request reuturn wrong.",)
 
-    def get_ref_domains(self, domain: str, max_count=10, is_dev=True, fresh_data=False) ->[]:
+    def get_ref_domains(self, domain: str, max_count=10, is_dev=True, fresh_data=False) ->list:
         """
         get referring domains information about a domain.
         :param domain: domain name, could be a link.
@@ -123,21 +150,30 @@ class MajesticCom:
             ref_domains = []
             table = json_data["DataTables"]["Results"]["Data"]
             for item in table:
+                topic_score_s = item["TopicalTrustFlow_Value_0"]
+                if len(topic_score_s) == 0:
+                    topic_s = 0
+                else:
+                    topic_s = int(topic_score_s)
                 ref_domains.append(MajesticRefDomainStruct(domain=item["Domain"], tf=item["TrustFlow"],
-                                                           cf=item["CitationFlow"], backlinks=int(item["BackLinks_"+domain.lower()]),
+                                                           cf=item["CitationFlow"],
+                                                           backlinks=int(item["BackLinks_"+domain.lower().rstrip('/')]),
                                                            country=item["CountryCode"], ref_domains=item["RefDomains"],
-                                                           ip=item["IP"], alexa_rank=item["AlexaRank"]))
+                                                           ip=item["IP"], alexa_rank=item["AlexaRank"],
+                                                           src_topic=item["TopicalTrustFlow_Topic_0"],
+                                                           src_topic_tf=topic_s,
+                                                           potential_urls=int(item["CrawledURLs"]),))
             return ref_domains
         else:
             raise ValueError("get_ref_domains(): data request reuturn wrong.",)
 
-    def get_anchor_text_info(self, domain: str, max_count=10, is_dev=True, fresh_data=False) -> ([], int, int, int):
+    def get_anchor_text_info(self, domain: str, max_count=10, is_dev=True, fresh_data=False) -> ([], int, int, int, int):
         """
         get anchor text information about a domain.
         :param domain: domain name, could be a link.
         :param max_count: number of anchor text result points.
         :param is_dev: dev mode for test on fake data set, else for production mode.
-        :return:tuple -> list of anchor text, total backlinks, deleted backlinks, no-follow backlinks.
+        :return:tuple -> list of anchor text, total backlinks, deleted backlinks, no-follow backlinks,
         """
         if len(domain) == 0:
             raise ValueError("get_anchor_text(): domain name is empty")
@@ -157,6 +193,7 @@ class MajesticCom:
             anchorTextRows = []
             #anchorTexts = []
             total_links = 0
+            total_ref_domains = 0
             deleted_links = 0
             no_follow_links = 0
             table = json_data["DataTables"]["AnchorText"]["Data"]
@@ -169,9 +206,10 @@ class MajesticCom:
                 total_links += item["TotalLinks"]
                 deleted_links += item["DeletedLinks"]
                 no_follow_links += item["NoFollowLinks"]
+                total_ref_domains += item["RefDomains"]
                 anchorTextRows.append((temp_anchor, item["RefDomains"], item["TotalLinks"], item["DeletedLinks"], item["NoFollowLinks"]))
             #anchorTexts = [x for x in sorted(anchorTextRows, key=lambda anchorRow: anchorRow[1], reverse=True)]
-            return anchorTextRows, total_links, deleted_links, no_follow_links
+            return anchorTextRows, total_links, deleted_links, no_follow_links, total_ref_domains
         else:
             raise ValueError("get_anchor_text(): data request reuturn wrong.",)
 

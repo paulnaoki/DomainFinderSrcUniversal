@@ -5,6 +5,7 @@ import requests
 from DomainFinderSrc.ArchiveOrg import ArchiveStruct, ArchiveDetail
 from DomainFinderSrc.Scrapers.LinkChecker import LinkChecker
 from DomainFinderSrc.ArchiveOrg.ArchiveExplore import LinkUtility
+from datetime import datetime
 
 
 def test_response(link: str) -> (bool, str):
@@ -96,6 +97,22 @@ class ArchiveOrg:
         if not archive_struct.link.endswith("/"):
             archive_struct.link += "/"
         return ArchiveOrg.BASE_ARCHIVE_URL + archive_struct.date_stamp + "/" + archive_struct.link
+
+    @staticmethod
+    def _get_archive_lang(archive: ArchiveStruct) -> str:
+        link = ArchiveOrg.get_archive_link(archive)
+
+
+    @staticmethod
+    def get_archives_lang(root_domain: str, thread_size=10, profile_check=300) -> list:
+        url = LinkChecker.get_valid_link(root_domain, link="")
+        profiles = ArchiveOrg.get_url_info(url, min_size=1, limit=0-profile_check)
+        today_stamp = datetime.utcnow().timestamp()
+        for item in profiles:
+            if isinstance(item, ArchiveStruct):
+                timestamp = item.get_datestamp_unix_time()
+                print(str(item), " converted:", str(timestamp))
+        return []
 
     @staticmethod
     def get_best_archive(root_domain: str, thread_size=100, profile_check=10, pass_threshold=0.8, res_limit=2000) -> ArchiveDetail:

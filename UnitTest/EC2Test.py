@@ -11,10 +11,20 @@ from DomainFinderSrc.AmazonServiceCom.DataStruct import *
 
 
 class EC2Test(TestCase):
-    def testTerminateWithTimeout(self):
+    def testRunNormalInstances(self):
+        results = EC2Resource.EC2Resource.start_normal_instances(amazon_ec2_account,
+                                                                 image_id=Const.ImageId.Crawler_v1058_High_ESB,
+                                                                 key_name=Const.SshSecureKeyName.Default,
+                                                                 security_group=Const.SecureGroupId.CrawlOperation,
+                                                                 instance_type=Const.Ec2InstanceType.T2_Micro,
+                                                                 zone=Const.Zone.US_West_2C, instance_count=2,
+                                                                 dry_run=False)
+        print(results)
+
+    def testTerminateWithTimeout(self, timeout=120, tag_v="CrawlWithHighIO"):
         tag_name = "LaunchGroupCrawl"
-        tag_value = "TestCrawl"
-        timeout_min = 60
+        tag_value = tag_v
+        timeout_min = timeout
         counter = 0
         results = EC2Resource.EC2Resource.get_instances_by_tag(amazon_ec2_account, zone=Const.Zone.US_West_2A,
                                                                 tag_key=tag_name, tag_value=tag_value)
@@ -102,41 +112,47 @@ class EC2Test(TestCase):
                                                                   tags_dict=tag_dict)
         print(result)
 
-    def testGetInstanceByTag(self):
+    def testGetInstanceByTag(self, tag_v="dec17") -> []:
+        private_ips = []
+        public_ips = []
         tag_name = "LaunchGroupCrawl"
-        tag_value = "TestCrawl"
+        tag_value = tag_v
         results = EC2Resource.EC2Resource.get_instances_by_tag(amazon_ec2_account, zone=Const.Zone.US_West_2A,
                                                                 tag_key=tag_name, tag_value=tag_value)
         for item in results:
-            if isinstance(item, InstanceInfo):
+            if isinstance(item, InstanceInfo) and len(item.private_ip) > 0:
+                private_ips.append(item.private_ip)
+                public_ips.append(item.public_ip)
                 print(item.private_ip)
+        print("total:", len(private_ips))
+        return private_ips, public_ips
 
-    def testAutomationFlow1(self):
+    def testAutomationFlow1(self, instances_count=20, tag_v="dec17"):
         tag_name = "LaunchGroupCrawl"
-        tag_value = "TestCrawl"
+        tag_value = tag_v
         tag_dict = {tag_name: tag_value}
-        instance_count = 20
+        instance_count = instances_count
         mins_to_wait = 30
         min_count = 0
         instance_type = Const.Ec2InstanceType.M4_4X
         instance_max_price = 1.1
-        # request = EC2Resource.EC2Resource.request_spot_instances(amazon_ec2_account,
-        #                                                          image_id=Const.ImageId.Crawler_v1047,
-        #                                                          key_name=Const.SshSecureKeyName.Default,
-        #                                                          security_group=Const.SecureGroupId.CrawlOperation,
-        #                                                          instance_type=instance_type,
-        #                                                          zone=Const.Zone.US_West_2A,
-        #                                                          instance_count=instance_count,
-        #                                                          price=instance_max_price,
-        #                                                          launch_group=tag_value,
-        #                                                          request_valid_duration_min= mins_to_wait,
-        #                                                          dry_run=False)
-        # request_ids = request.ids
-        # print("request is send, request ids are:")
-        # if request_ids is not None:
-        #     for item in request_ids:
-        #         print(item)
-        # time.sleep(1)
+        request = EC2Resource.EC2Resource.request_spot_instances(amazon_ec2_account,
+                                                                 image_id=Const.ImageId.Crawler_v1058_High_ESB,
+                                                                 key_name=Const.SshSecureKeyName.Default,
+                                                                 security_group=Const.SecureGroupId.CrawlOperation,
+                                                                 instance_type=instance_type,
+                                                                 zone=Const.Zone.US_West_2A,
+                                                                 instance_count=instance_count,
+                                                                 price=instance_max_price,
+                                                                 launch_group=tag_value,
+                                                                 request_valid_duration_min= mins_to_wait,
+                                                                 dry_run=False)
+        request_ids = request.ids
+        print("request is send, request ids are:")
+        if request_ids is not None:
+            for item in request_ids:
+                print(item)
+        time.sleep(1)
 
         request_id_list = []
         instance_id_list = []
@@ -167,14 +183,20 @@ class EC2Test(TestCase):
 
         private_ip_list = []
         if len(instance_id_list) > 0:
-            results = EC2Resource.EC2Resource.get_instances_by_tag(amazon_ec2_account, zone=Const.Zone.US_West_2A,
-                                                                    tag_key=tag_name, tag_value=tag_value)
-            if results is not None:
-                print("here is a list of ip we can use:")
-                for item in results:
-                    print(item)
-                    private_ip_list.append(item.private_ip)
+            while not stop_event.is_set():
+                results = EC2Resource.EC2Resource.get_instances_by_tag(amazon_ec2_account, zone=Const.Zone.US_West_2A,
+                                                                        tag_key=tag_name, tag_value=tag_value)
+                if results is not None:
+                    print("here is a list of ip we can use:")
+                    if results[0].state == Const.InstanceState.Running:
+                        for item in results:
+                            print(item.private_ip)
+                            private_ip_list.append(item.private_ip)
+                        break
+                time.sleep(60)
         if len(private_ip_list) > 0:
-            print("everything is ok")
+            return private_ip_list
+        else:
+            return []
 
 

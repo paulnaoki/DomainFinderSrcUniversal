@@ -16,6 +16,7 @@ class SelecElement:
         self.target = targerName
         self.element_type = targetType
 
+
 class Navigator:
     def __init__(self, driver: webdriver.Chrome):
         """

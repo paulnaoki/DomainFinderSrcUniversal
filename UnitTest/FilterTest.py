@@ -1,10 +1,10 @@
 from unittest import TestCase
 from DomainFinderSrc.Scrapers.MatrixFilter import *
 from DomainFinderSrc.Scrapers.MatrixFilterControl import *
-from multiprocessing import Event
+from multiprocessing import Event, RLock
 import queue
 import csv
-from UnitTest.Accounts import account
+from UnitTest.Accounts import moz_account, majestic_account
 from DomainFinderSrc.MiniServer.Common.DBInterface import FilteredResultDB
 from DomainFinderSrc.Scrapers.SiteTempDataSrc.DataStruct import FilteredDomainData
 from DomainFinderSrc.Utilities.TimeIt import timeit
@@ -17,23 +17,22 @@ def get_archive_filter(**input_param) -> ArchiveOrgFilter:
     return archive_filter
 
 
-def get_majestic_filter() -> MajesticFilter:
+def get_majestic_filter(**input_param) -> MajesticFilter:
         manager = AccountManager()
-        manager.AccountList.append(account)
-        input_param ={"input_queue": queue.Queue(), "output_queue": queue.Queue(), "stop_event": Event()}
+        manager.AccountList.append(majestic_account)
+        # input_param ={"input_queue": queue.Queue(), "output_queue": queue.Queue(), "stop_event": Event()}
         majestic_filter = MajesticFilter(manager=manager, **input_param)
         return majestic_filter
 
 
-def get_moz_filter(input_q, output_q, stop_event, throughput_debug=False) -> MozFilter:
-    db_path = "/Users/superCat/Desktop/PycharmProjectPortable/sync/"
-    manager = AccountManager(db_path)
-    input_param ={"input_queue": input_q, "output_queue": output_q, "stop_event": stop_event}
-    moz_filter = MozFilter(manager=manager, throughput_debug=throughput_debug, **input_param)
+def get_moz_filter(**input_param) -> MozFilter:
+    # db_path = "/Users/superCat/Desktop/PycharmProjectPortable/sync/"
+    # manager = AccountManager()
+    moz_filter = MozFilter(**input_param)
     return moz_filter
 
 
-def testThroughPut(fil, worker_number: int, test_sites_count=5000):
+def testThroughPut(fil, manager=None, accounts=[], test_sites_count=5000):
         manager = AccountManager()
         input_q = queue.Queue()
         output_q = queue.Queue()
@@ -41,8 +40,8 @@ def testThroughPut(fil, worker_number: int, test_sites_count=5000):
         stop_event = Event()
         input_param ={"input_queue": input_q, "output_queue": output_q, "stop_event": stop_event,
                       "throughput_debug": True,
-                      "worker_number": worker_number,
-                      "manager": manager}
+                      "manager": manager,
+                      "accounts": accounts}
 
         test_filter = fil(**input_param)
         test_filter.start()
@@ -76,6 +75,7 @@ def testThroughPut(fil, worker_number: int, test_sites_count=5000):
             input_t.join()
         print("operation finished.")
 
+
 class FilterTest(TestCase):
 
     @timeit()
@@ -84,7 +84,7 @@ class FilterTest(TestCase):
         output_q = queue.Queue()
 
         stop_event = Event()
-        input_param ={"input_queue": input_q, "output_queue": output_q, "stop_event": stop_event}
+        input_param ={"input_queue": input_q, "output_queue": output_q, "stop_event": stop_event, "manager": AccountManager()}
         moz_filter = get_moz_filter(**input_param)
         moz_filter.start()
         site_count = 5000
@@ -109,6 +109,10 @@ class FilterTest(TestCase):
         # for item in moz_filter._account_list:
         #     print(item)
 
+    def testMozFilter2(self):
+        moz_accounts = [moz_account, ]
+        testThroughPut(MozFilter, accounts=moz_accounts, test_sites_count=25)
+
     def testArchiveProfileFilter1(self):
         input_param ={"input_queue": queue.Queue(), "output_queue": queue.Queue(), "stop_event": Event(),
                       "throughput_debug": True, "worker_number": 2}
@@ -122,22 +126,42 @@ class FilterTest(TestCase):
         testThroughPut(ArchiveOrgFilter, worker_number=30, test_sites_count=5000)
 
     def testMajesticFilter(self):
-        filter = get_majestic_filter()
-        param = {"Account": account}
-        links = FileIO.FileHandler.read_lines_from_file("/Users/superCat/Desktop/PycharmProjectPortable/test/spam_test1.txt")
+
+        filter = get_majestic_filter(worker_number=1, input_queue=Queue(), output_queue=Queue(), stop_event=Event() )
+        param = {"Account": majestic_account}
+        links = FileIO.FileHandler.read_lines_from_file("/Users/superCat/Desktop/PycharmProjectPortable/test/spam_test2.txt")
 
         for link in links:
+            link = LinkChecker.get_root_domain(link)[1]
+            print("doing link:", link)
             site = FilteredDomainData(domain=link)
+            filter.process_data(data=site, **param)
+
+    def testMajesticFilter2(self):
+
+        filter = get_majestic_filter(worker_number=1, input_queue=Queue(), output_queue=Queue(), stop_event=Event(),
+                                     en_tf_check=False, en_spam_check=True)
+        param = {"Account": majestic_account}
+        links = FileIO.FileHandler.read_lines_from_file("/Users/superCat/Desktop/PycharmProjectPortable/test/spam_test2.txt")
+
+        for link in links:
+            # link = LinkChecker.get_root_domain(link)[1]
+            print("doing link:", link)
+            site = FilteredDomainData(domain=link, tf=15, cf=15, ref_domains=10)
             filter.process_data(data=site, **param)
 
     def testArchiveFilter0(self):
         testThroughPut(MajesticFilter, worker_number=1, test_sites_count=100)
 
     def testFilterAll1(self):
+        db_path = "/Users/superCat/Desktop/PycharmProjectPortable/sync/"
+        manager = AccountManager(db_path)
+        input_param ={"input_queue": queue.Queue(), "output_queue": queue.Queue(), "stop_event": Event(),
+                      "throughput_debug": True, "worker_number": 2}
         file_path = "/Users/superCat/Desktop/PycharmProjectPortable/sync/Moz_filtering.csv"
-        archive_filter = get_archive_filter()
-        majestic_filter = get_majestic_filter()
-        param = {"Account": account}
+        archive_filter = get_archive_filter(**input_param)
+        majestic_filter = get_majestic_filter(**input_param)
+        param = {"Account": majestic_account}
         count = 0
         with open(file_path, 'rt') as csvfile:
             reader = csv.reader(csvfile, delimiter=',')
@@ -168,3 +192,37 @@ class FilterTest(TestCase):
             for item in sites:
                 print("item number:", count, " ", item)
                 count += 1
+
+    def testWriteToDb(self):
+        db_path = "/Users/superCat/Desktop/PycharmProjectPortable/sync/FilteredSitesList"
+        good_db = "/Users/superCat/Desktop/PycharmProjectPortable/sync/Majestic_filtering_good.csv"
+        table = "20/12/2015 Legal"
+        db = FilteredResultDB(table=table, offset=0, db_addr=db_path)
+        count = 0
+        temp_sites = []
+        with open(good_db, mode='r', newline='') as csv_file:
+            rd = csv.reader(csv_file, delimiter=',')
+            for row in rd:
+                if int(row[10]) > 1450612100:
+                    data = FilteredDomainData.from_tuple(row)
+                    print(data.__dict__)
+                    count += 1
+                    temp_sites.append(data)
+        print("total:", count)
+        db.add_sites(temp_sites, skip_check=False)
+        db.close()
+
+    def testFilterPool(self):
+        self._stop_event = Event()
+        filter_matrix = CrawlMatrix(tf=15, cf=15, da=15, ref_domains=10, tf_cf_deviation=0.8)
+        # filter_matrix = FilteredDomainData(tf=15, cf=15, da=15, ref_domains=10, tf_cf_deviation=0.80)
+        self._db_ref = "something"
+        self._input_queue = Queue()
+        self._output_queue = Queue()
+        self._pool_input = Queue()
+        self._queue_lock = RLock()
+        pool = FilterPool(self._pool_input, self._output_queue, self._queue_lock, self._stop_event, matrix=filter_matrix,
+                                )
+        pool.start()
+        while True:
+            time.sleep(1)

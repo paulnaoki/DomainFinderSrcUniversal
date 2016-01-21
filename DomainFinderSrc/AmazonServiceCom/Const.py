@@ -41,8 +41,8 @@ class Ec2InstanceType:
 
 
 class ImageId:
-    Host_v1048 = "ami-6c826f5f"
-    Crawler_v1047 = "ami-a256b691"
+    Host_v1059 = "ami-fabfa09b"
+    Crawler_v1058_High_ESB = "ami-b9bea1d8"
 
 
 class SecureGroupId:

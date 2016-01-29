@@ -127,7 +127,7 @@ class FilterTest(TestCase):
 
     def testMajesticFilter(self):
 
-        filter = get_majestic_filter(worker_number=1, input_queue=Queue(), output_queue=Queue(), stop_event=Event() )
+        filter = get_majestic_filter(worker_number=1, input_queue=Queue(), output_queue=Queue(), stop_event=Event())
         param = {"Account": majestic_account}
         links = FileIO.FileHandler.read_lines_from_file("/Users/superCat/Desktop/PycharmProjectPortable/test/spam_test2.txt")
 
@@ -136,6 +136,11 @@ class FilterTest(TestCase):
             print("doing link:", link)
             site = FilteredDomainData(domain=link)
             filter.process_data(data=site, **param)
+
+    def testSpamFilter(self):
+        test_file_path = ""
+        log_file_path = ""
+
 
     def testMajesticFilter2(self):
 

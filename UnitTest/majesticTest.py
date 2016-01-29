@@ -249,6 +249,44 @@ class MajesticTest(TestCase):
             if isinstance(item, Serializable):
                 print(item.get_serializable(False))
 
+
+    def testImportSeeds0(self):
+        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/NewCategorySeedDB.db"
+        path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3.csv"
+        db = CategorySeedSiteDB(seed_db_addr)
+        with open(path, mode='rt') as csv_file:
+            # lines = len(csv_file.readlines())
+            rd = csv.reader(csv_file, delimiter=',')
+            header = next(rd) # skip header
+            counter = 0
+            temp = []
+            while True:
+                try:
+                    row = next(rd)
+                    if len(row) == 0:
+                        break
+                    if len(row) == 6:
+                        domain, backlink, tf, cf, topic, topical_tf = row
+                        print("current loc:", counter, "data:", row)
+                        # if len(topic) > 0:
+                        #     decoded_topic = basic_manager.decode_sub_category(topic, False)
+                        data = MajesticBacklinkDataStruct(ref_domain=domain, src_cf=int(cf), src_tf=int(tf),
+                                                          src_topical_tf=int(topical_tf))
+                        temp.append(data)
+                except StopIteration:
+                    print('stop iteration')
+                    break
+                except Exception as ex:
+
+                    print("exception:", str(ex), "row:", str(counter))
+                    if len(str(ex)) == 0:
+                        break
+                finally:
+                    counter += 1
+
+        db.save_to_table('Games/Gambling', temp)
+        db.close()
+
     def testImportSeeds(self):
         seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
         category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
@@ -257,7 +295,7 @@ class MajesticTest(TestCase):
         category_manager = CategoryDBManager(category_db_addr)
         seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=seed_db_addr)
         import csv
-        path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3 copy.csv"
+        path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/Gambling3.csv"
         counter = 0
         with open(path, mode='r', newline='', encoding='utf-8') as csv_file:
             # lines = len(csv_file.readlines())
@@ -351,8 +389,8 @@ class MajesticTest(TestCase):
 
 
         total_count = 0
-        seed_init_limit = 200
-        seed_depth_limit = 800
+        seed_init_limit = 400
+        seed_depth_limit = 3000
         temp_niches = []
         niches = []
 
@@ -368,7 +406,7 @@ class MajesticTest(TestCase):
             print(decoded_topic)
         minimum_tf = 25
         temp_sites = []
-        target_ca = ["Society/Law", "Society/Politics", "Society/Issues", "Business/Financial Services"]
+        target_ca = ["Society/Law", "Society/Politics", "Society/Issues", "Business/Financial Services", "Society/Government"]
         sites = []
         parameters = {"TF": minimum_tf}
         key_words = ["Alcohol law", "Banking law", "Antitrust law", "Aviation law", "Corporate law", "Communications law",

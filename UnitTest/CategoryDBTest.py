@@ -105,3 +105,20 @@ class SiteDBTest(TestCase):
             print("adding:", item, "result:", len(results))
             db_to.save_to_table(item, results)
 
+    def test_db_migration(self):
+        old_seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+        new_seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/NewCategorySeedDB.db"
+        old_db = CategorySeedSiteDB(old_seed_db_addr)
+        new_db = CategorySeedSiteDB(new_seed_db_addr)
+        old_tables = [x[0] for x in old_db.cur.execute("SELECT name FROM sqlite_master WHERE type='table';")]
+        print('table length:', len(old_tables))
+        for table in old_tables:
+            print('doing table:', table)
+            data = old_db.get_from_table(table, 0, 10000000, reverse_read=False, random_read=False)
+            print('data len for table:', len(data))
+            new_db.save_to_table(table, data)
+        old_db.close()
+        new_db.close()
+
+
+

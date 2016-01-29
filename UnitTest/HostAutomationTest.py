@@ -1,3 +1,4 @@
+from DomainFinderSrc.AmazonServiceCom import Const
 from DomainFinderSrc.MiniServer.DomainMiningSlaveServer.MiningSlaveController import MiningController
 from unittest import TestCase
 from DomainFinderSrc.MiniServer.DatabaseServer.CategorySiteDB import CategorySeedSiteDB, CategorySiteDBManager
@@ -12,10 +13,11 @@ from DomainFinderSrc.SiteConst import *
 
 
 def get_server():
-    return Server(address=ServerAddress("52.88.37.117", 9999))
+    return Server(address=ServerAddress("54.191.238.226", 9999))
+    #return Server(address=ServerAddress("52.88.37.117", 9999))
 
-seed_db_name = "17/01/2016 Legal"
-launch_group = "jan17"
+seed_db_name = "29/01/2016 Generic"
+launch_group = "jan291"
 
 
 def setup(ser: Server, data: SetupData):
@@ -127,20 +129,23 @@ class SeedUploadTest(TestCase):
         # hostController.join()
 
     def testSeedsUpload2(self) -> int:
-        categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+        categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/NewCategorySeedDB.db"
         # categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB2.db"
         target_ca = {
-        "Society/Law": 20000,
-        "Society/Politics":20000,
-        "Society/Issues":20000,
-        "Business/Financial Services":20000,
+        "Games/Gambling": 62000,
+        # "Society/Politics":20000,
+        # "Society/Issues":20000,
+        # "Business/Financial Services":20000,
         }
 
         # seeds_needed = 20000
         total_seeds = 0
         parameters = {"TF": 0}
+        db = CategorySeedSiteDB(categoy_db_addr)
         for ca, seeds_needed in target_ca.items():
-            sites = get_seeds_normal(categoy_db_addr, seeds_needed, ca, parameters)
+            sites = [x.ref_domain for x in db.get_from_table(ca, 68000, seeds_needed, random_read=False, reverse_read=False,
+                                                                           filter_dict=parameters)]
+            # sites = get_seeds_normal(categoy_db_addr, seeds_needed, ca, parameters)
             total_seeds += len(sites)
             print("doing site:", ca, " size:", len(sites))
             in_data = MiningList(ref=seed_db_name, data=sites)
@@ -148,6 +153,7 @@ class SeedUploadTest(TestCase):
             hostController = HostController(ser, cmd=ServerCommand.Com_Add_Seed, in_data=in_data)
             hostController.start()
             hostController.join()
+        db.close()
         if len(target_ca) > 1:
             return total_seeds * 0.97
         else:
@@ -231,19 +237,19 @@ class SeedUploadTest(TestCase):
         warm_up_time_min = 5
         # total_seeds = self.testSeedsUpload2()
         # total_seeds = None
-        total_seeds = 61642
+        total_seeds = 88856
         offset = 0
         print("total seed:", total_seeds)
         accounts = self.test_get_moz_accounts(moz_account_count)
         accounts.append(majestic_account)
-        private_ips = get_ec2_instances_tester.testAutomationFlow1(instance_count, tag_value)
+        private_ips = get_ec2_instances_tester.testAutomationFlow1(instance_count, tag_value, zone=Const.Zone.US_West_2C)
         # private_ips = get_ec2_instances_tester.testGetInstanceByTag(tag_value)[0]
         seed_filter = SeedSiteFilter(update_interval=2400)
         temp_result_filter = ExternalSiteDBFilter(update_interval=30)
         result_filter = FilteredResultFilter(update_interval=30)
         setup_data = SetupData(ref=seed_db_name, cap=1, cap2=230, cap3=2, total=total_seeds,
                                offset=offset,
-                               max_page_level=999, max_page_limit=10000, loopback=False,
+                               max_page_level=999, max_page_limit=20000, loopback=False,
                                db_filter=DBFilterCollection(seed=seed_filter, external=temp_result_filter, filteredResult=result_filter, save=True),
                                crawl_matrix=CrawlMatrix(da=10, tf=15, cf=15, ref_domains=10, tf_cf_deviation=0.8,
                                                         en_moz=True, en_archive_check=True, en_archive_count=True,

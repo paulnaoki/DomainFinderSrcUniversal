@@ -127,7 +127,7 @@ class EC2Test(TestCase):
         print("total:", len(private_ips))
         return private_ips, public_ips
 
-    def testAutomationFlow1(self, instances_count=20, tag_v="dec17"):
+    def testAutomationFlow1(self, instances_count=20, tag_v="dec17", zone=Const.Zone.US_West_2A):
         tag_name = "LaunchGroupCrawl"
         tag_value = tag_v
         tag_dict = {tag_name: tag_value}
@@ -141,7 +141,7 @@ class EC2Test(TestCase):
                                                                  key_name=Const.SshSecureKeyName.Default,
                                                                  security_group=Const.SecureGroupId.CrawlOperation,
                                                                  instance_type=instance_type,
-                                                                 zone=Const.Zone.US_West_2A,
+                                                                 zone=zone,
                                                                  instance_count=instance_count,
                                                                  price=instance_max_price,
                                                                  launch_group=tag_value,

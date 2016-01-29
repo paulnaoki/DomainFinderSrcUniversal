@@ -1,5 +1,6 @@
 from multiprocessing import Event
 import queue
+from DomainFinderSrc.Utilities.MachineInfo import MachineInfo, MachineType
 from unittest import TestCase
 from DomainFinderSrc.MajesticCom import *
 from DomainFinderSrc.SiteConst import *
@@ -307,26 +308,36 @@ class MajesticTest(TestCase):
 
     def testGetSeedsFromBacklinks(self):
         import random
+
         import time
-        logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed5.csv"
-        # seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB_WithCountry_Temp.db"
-        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
-        # logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed4.csv"
-        # seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
-        save_seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
-        category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
-        seed_site_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SiteFromResults.txt"
+        machine_type = MachineInfo.get_machine_type()
+        if machine_type == MachineType.Linux:
+            logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed5.csv"
+            # seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB_WithCountry_Temp.db"
+            seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+            # logging_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/GeneralSeed4.csv"
+            # seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB.db"
+            save_seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+            category_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/test/CategoryDB.db"
+            seed_site_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SiteFromResults.txt"
+            country_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/SpamFilter/bad_country.txt"
+        else:
+            logging_path = "D:/SQLiteDB/GeneralSeed5.csv"
+            seed_db_addr = "D:/SQLiteDB/CategorySeedDB3.db"
+            save_seed_db_addr = "D:/SQLiteDB/CategorySeedDB3.db"
+            seed_site_file_path = "D:/SQLiteDB/SiteFromResults.txt"
+            country_file_path = "D:/DomainFinderFiles/SpamFilter/bad_country.txt"
         db = CategorySeedSiteDB(seed_db_addr)
         basic_manager = CategoryManager()
-        thread_pool_size = 20
+        thread_pool_size = 25
         max_count = 5000
 
-        category_manager = CategoryDBManager(category_db_addr)
+        # category_manager = CategoryDBManager(category_db_addr)
         seed_manager = CategorySiteDBManager(CategorySeedSiteDB, db_path=save_seed_db_addr)  # was seed_db_addr
         seed_manager._max_site_limit = int(thread_pool_size * max_count*0.75)
 
         counter = 0
-        country_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/SpamFilter/bad_country.txt"
+        # country_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/SpamFilter/bad_country.txt"
         bad_countries = [x.upper() for x in FileIO.FileHandler.read_lines_from_file(country_file_path)]
 
         def backlink_callback_inner(link_data):
@@ -368,17 +379,18 @@ class MajesticTest(TestCase):
             print(decoded_topic)
         minimum_tf = 25
         temp_sites = []
-        target_ca = ["Society/Law", "Society/Politics", "Society/Issues", "Business/Financial Services"]
+        # target_ca = ["Society/Law", "Society/Politics", "Society/Issues", "Business/Financial Services"]
+        target_ca = []
         sites = []
         parameters = {"TF": minimum_tf}
-        key_words = ["Alcohol law", "Banking law", "Antitrust law", "Aviation law", "Corporate law", "Communications law",
-                     "Construction law", "Consumer law", "Drug control law", "Insurance law", "Tax law"]
+        # key_words = ["Alcohol law", "Banking law", "Antitrust law", "Aviation law", "Corporate law", "Communications law",
+        #              "Construction law", "Consumer law", "Drug control law", "Insurance law", "Tax law"]
         # for item in key_words:
         #     temp_sites += GoogleCom.get_sites(keyword=item, index=0, filter_list=forbidden_list, blog=True)[0:]
         #     print("sites count:", len(temp_sites))
         #     time.sleep(2)
-        # temp_sites = FileHandler.read_lines_from_file(seed_site_file_path)
-        # temp_sites = list(set(temp_sites))
+        temp_sites = FileHandler.read_lines_from_file(seed_site_file_path)
+        temp_sites = list(set(temp_sites))
         print("seeds total:", len(temp_sites))
         categories = db.get_sub_category_tables_name()
         for niche in niches:
@@ -428,8 +440,13 @@ class MajesticTest(TestCase):
         # print("job finished, total backlinks:", total_count)
 
     def testPrintSeedDB(self):
-        seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
-        log_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SeedLog3.csv"
+        machine_type = MachineInfo.get_machine_type()
+        if machine_type == MachineType.Linux:
+            seed_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+            log_file_path = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/SeedLog3.csv"
+        else:
+            seed_db_addr = "D:/SQLiteDB/CategorySeedDB3.db"
+            log_file_path = "D:/SQLiteDB/SeedLog3.csv"
         enable_log = True
         FileHandler.remove_file_if_exist(log_file_path)
         db = CategorySeedSiteDB(seed_db_addr)
@@ -445,7 +462,10 @@ class MajesticTest(TestCase):
             if target_niche in item or len(target_niche) == 0:
                 count = db.get_total(item, **parameters)
                 total_count += count
-                print(item, "  ", count)
+                try:
+                    print(item, " ", count)
+                except Exception as ex:
+                    print(ex)
                 if enable_log:
                     CsvLogger.log_to_file_path(log_file_path, [(item, str(count)), ])
         print("total:", total_count)

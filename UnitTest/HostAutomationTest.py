@@ -14,8 +14,8 @@ from DomainFinderSrc.SiteConst import *
 def get_server():
     return Server(address=ServerAddress("52.88.37.117", 9999))
 
-seed_db_name = "17/01/2016 Legal"
-launch_group = "jan17"
+seed_db_name = "29/01/2016 Generic"
+launch_group = "jan29"
 
 
 def setup(ser: Server, data: SetupData):
@@ -67,7 +67,7 @@ def get_seeds(categoy_db_addr: str,  seed_limit: int, niche: str, parameters: di
 
 def get_seeds_normal(categoy_db_addr: str,  seed_limit: int, niche: str, parameters: dict):
     db = CategorySeedSiteDB(categoy_db_addr)
-    temp = [x.ref_domain for x in db.get_from_table(niche, 0, seed_limit, random_read=False,
+    temp = [x.ref_domain for x in db.get_from_table(niche, 0, seed_limit, random_read=True,
                                                                    filter_dict=parameters)]
     db.close()
     return temp
@@ -154,7 +154,11 @@ class SeedUploadTest(TestCase):
             return total_seeds
 
     def testSeedsUpload_General(self) -> int:
-        categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+        from DomainFinderSrc.Utilities.MachineInfo import MachineType, MachineInfo
+        if MachineInfo.get_machine_type() == MachineType.Linux:
+            categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB3.db"
+        else:
+            categoy_db_addr = "D:/SQLiteDB/CategorySeedDB3.db"
         # categoy_db_addr = "/Users/superCat/Desktop/PycharmProjectPortable/Seeds/CategorySeedDB2.db"
         db = CategorySeedSiteDB(categoy_db_addr)
         categories = db.get_sub_category_tables_name()
@@ -167,19 +171,32 @@ class SeedUploadTest(TestCase):
                 target_ca.update({item:seed_count})
         # seeds_needed = 20000
         total_seeds = 0
-        in_data = MiningList(ref=seed_db_name, data=[])
+        temp = []
         parameters = {"TF": 5}
         counter = 0
         for ca, seeds_needed in target_ca.items():
             sites = get_seeds_normal(categoy_db_addr, seeds_needed, ca, parameters)
-            total_seeds += len(sites)
-            print(counter, " doing site:", ca, " size:", len(sites), " total:", total_seeds)
-            in_data.data += sites
+
+            try:
+                print(counter, " doing site:", ca, " size:", len(sites), " total:", total_seeds)
+            except Exception as ex:
+                print(ex)
+            if len(sites) >= seed_count/2:
+                total_seeds += len(sites)
+                temp += sites
             counter += 1
         ser = get_server()
-        hostController = HostController(ser, cmd=ServerCommand.Com_Add_Seed, in_data=in_data)
-        hostController.start()
-        hostController.join()
+        chunk_size = 10000
+        index = 0
+        while index < total_seeds:
+            if index + chunk_size >= total_seeds:
+                in_data = MiningList(ref=seed_db_name, data=temp[index:])
+            else:
+                in_data = MiningList(ref=seed_db_name, data=temp[index:index+chunk_size])
+            hostController = HostController(ser, cmd=ServerCommand.Com_Add_Seed, in_data=in_data)
+            hostController.start()
+            hostController.join()
+            index += chunk_size
         if len(target_ca) > 1:
             return total_seeds * 0.97
         else:

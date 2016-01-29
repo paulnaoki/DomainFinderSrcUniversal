@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='DomainFinderSrc',
-    version='1.0.6.3',
+    version='1.0.6.4',
     packages=['DomainFinderSrc',
               # 'DomainFinderSrc.xlrd',
               'DomainFinderSrc.MozCom',
